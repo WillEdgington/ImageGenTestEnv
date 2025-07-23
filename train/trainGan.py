@@ -85,7 +85,7 @@ def testStep(generator: torch.nn.Module,
 
             # Send fake and real images through discriminator
             realOut = discriminator(realImgs)
-            fakeOut = discriminator(fakeImgs.detach())
+            fakeOut = discriminator(fakeImgs)
 
             # Calculate discriminator loss
             realLossDis = lossFn(realOut, realLabels)
@@ -112,17 +112,23 @@ def train(generator: torch.nn.Module,
           lossFn: torch.nn.Module,
           epochs: int,
           latentDim: int=100,
-          device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> Dict[str, List]:
+          device: torch.device="cuda" if torch.cuda.is_available() else "cpu",
+          genSamplesPerEpoch: int=0) -> Dict[str, List]:
+    assert genSamplesPerEpoch <= 10, f"genSamplesPerEpoch must be less than or equal to 10, currently it is {genSamplesPerEpoch}"
+
     # Create results dictionary
     results = {"generator_train_loss": [],
                "generator_test_loss": [],
                "discriminator_train_loss": [],
-               "discriminator_test_loss": []}
+               "discriminator_test_loss": [],
+               "generator_samples": [] if genSamplesPerEpoch else None}
     
     generator.to(device)
     discriminator.to(device)
-
-
+    
+    # Create sample noise that will be used to generate images per epoch
+    if genSamplesPerEpoch:
+        sampleNoise = torch.randn(genSamplesPerEpoch, latentDim, 1, 1).to(device)
 
     for epoch in tqdm(range(epochs)):
         # Run a training step
@@ -134,6 +140,8 @@ def train(generator: torch.nn.Module,
                                                optimD=optimD,
                                                latentDim=latentDim,
                                                device=device)
+        results["discriminator_train_loss"].append(disTrainLoss)
+        results["generator_train_loss"].append(genTrainLoss)
         
         # Test the models
         disTestLoss, genTestLoss = testStep(generator=generator,
@@ -142,9 +150,20 @@ def train(generator: torch.nn.Module,
                                             lossFn=lossFn,
                                             latentDim=latentDim,
                                             device=device)
+        results["discriminator_test_loss"].append(disTestLoss)
+        results["generator_test_loss"].append(genTestLoss)
+        
+        # Get generator sample
+        if genSamplesPerEpoch:
+            generator.eval()
+            with torch.inference_mode():
+                sampleGen = generator(sampleNoise).to("cpu")
+            results["generator_samples"].append(sampleGen)
+            
+
         
         # Print the epoch and loss values
-        print(f"/nEpoch: {epoch+1} | (Discriminator) Train loss: {disTrainLoss:.4f}, Test loss: {disTestLoss:.4f} | "
+        print(f"\nEpoch: {epoch+1} | (Discriminator) Train loss: {disTrainLoss:.4f}, Test loss: {disTestLoss:.4f} | "
               f"(Generator) Train loss: {genTrainLoss:.4f}, Test loss: {genTestLoss:.4f}")
 
     return results

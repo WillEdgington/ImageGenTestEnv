@@ -8,7 +8,8 @@ from torchinfo import summary
 
 from models.gan import Generator, Discriminator
 from train.trainGan import train
-from utils.visualize import plotGANLoss
+from utils.losses import plotGANLoss
+from utils.visualize import plotGANGeneratorSamples
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -83,10 +84,13 @@ if __name__=="__main__":
                        optimD=optimizerD,
                        optimG=optimizerG,
                        lossFn=GANloss,
-                       epochs=5)
+                       epochs=15,
+                       genSamplesPerEpoch=4)
     # Plot loss curves for GAN
     plotGANLoss(GANresults)
-    plt.show()
+    
+    # Plot the generated images from the training loop
+    plotGANGeneratorSamples(GANresults)
 
     
 
