@@ -1,2 +1,4 @@
 /.venv
 /data
+/saved_models
+/saved_results

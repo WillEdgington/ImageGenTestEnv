@@ -10,6 +10,7 @@ from models.gan import Generator, Discriminator
 from train.trainGan import train
 from utils.losses import plotGANLoss
 from utils.visualize import plotGANGeneratorSamples
+from utils.save import saveModelAndResultsMap, saveGANandResultsMap
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -76,6 +77,8 @@ if __name__=="__main__":
     optimizerG = torch.optim.Adam(generator.parameters(), lr=lr, betas=(B1, 0.999))
 
     # Train GAN (use seed for reproducibility)
+    EPOCHS = 5
+
     torch.manual_seed(MANUALSEED)
     GANresults = train(generator=generator,
                        discriminator=discriminator,
@@ -84,13 +87,21 @@ if __name__=="__main__":
                        optimD=optimizerD,
                        optimG=optimizerG,
                        lossFn=GANloss,
-                       epochs=15,
-                       genSamplesPerEpoch=4)
+                       epochs=EPOCHS,
+                       genSamplesPerEpoch=5)
+    
+    # Save the results and model
+    saveGANandResultsMap(generator=generator,
+                         discriminator=discriminator,
+                         results=GANresults,
+                         modelName=f"GAN_CIFAR10_{EPOCHS}_EPOCHS_MODEL.pth",
+                         resultsName=f"GAN_CIFAR10_{EPOCHS}_EPOCHS_RESULTS.pth")
+    
     # Plot loss curves for GAN
     plotGANLoss(GANresults)
     
     # Plot the generated images from the training loop
-    plotGANGeneratorSamples(GANresults)
+    plotGANGeneratorSamples(GANresults, step=1)
 
     
 
