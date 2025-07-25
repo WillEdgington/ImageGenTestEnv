@@ -32,11 +32,11 @@ def plotGANGeneratorSamples(results, step: int=1):
             ax.axis("off")
 
     bigAx = fig.add_subplot(111, frameon=False)
-    bigAx.set_xticks(np.arange(numCols) + 0.5)
-    # bigAx.set_yticks(np.arange(imgsPerSample))
+    bigAx.set_xticks(np.arange(numCols))
+    bigAx.set_yticks(np.arange(imgsPerSample))
 
     bigAx.set_xticklabels([f"{e}" for e in selectedEpochs])
-    # bigAx.set_yticklabels([f"{i}" for i in range(imgsPerSample)])
+    bigAx.set_yticklabels([f"{i}" for i in range(imgsPerSample)])
 
     bigAx.set_xlabel("Epoch")
     bigAx.set_ylabel("Latent Sample")

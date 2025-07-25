@@ -11,31 +11,11 @@ from train.trainGan import train
 from utils.losses import plotGANLoss
 from utils.visualize import plotGANGeneratorSamples
 from utils.save import saveModelAndResultsMap, saveGANandResultsMap
+from utils.data import prepareData
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 MANUALSEED = 42
-
-def collectData(train: bool=True):
-    # Create transform pipeline for images
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)) # Scales to [-1,1] (Common for the Gen models in use here)
-    ])
-
-    # Collect CIFAR10 training dataset with applied transform pipeline
-    dataset = datasets.CIFAR10(root="./data", train=train, download=True, transform=transform)
-    return dataset
-
-def createDataLoader(dataset: datasets.CIFAR10, batchSize: int=32, numWorkers: int=2, shuffle: bool=True, seed: int=42):
-    torch.manual_seed(seed)
-    dataloader = DataLoader(dataset, batch_size=batchSize, shuffle=shuffle, num_workers=numWorkers)
-    return dataloader
-
-def prepareData(train: bool=True, batchSize: int=32, numWorkers: int=2, seed: int=42):
-    dataset = collectData(train=train)
-    dataloader = createDataLoader(dataset, batchSize=batchSize, numWorkers=numWorkers, shuffle=train, seed=seed)
-    return dataloader
 
 if __name__=="__main__":
     # Prepare data loaders
@@ -77,7 +57,7 @@ if __name__=="__main__":
     optimizerG = torch.optim.Adam(generator.parameters(), lr=lr, betas=(B1, 0.999))
 
     # Train GAN (use seed for reproducibility)
-    EPOCHS = 5
+    EPOCHS = 150
 
     torch.manual_seed(MANUALSEED)
     GANresults = train(generator=generator,
@@ -101,7 +81,4 @@ if __name__=="__main__":
     plotGANLoss(GANresults)
     
     # Plot the generated images from the training loop
-    plotGANGeneratorSamples(GANresults, step=1)
-
-    
-
+    plotGANGeneratorSamples(GANresults, step=10)
