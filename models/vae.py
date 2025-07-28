@@ -1,0 +1,95 @@
+import torch
+
+from torch import nn
+
+class DownsampleBlock(nn.Module):
+    """Downsample block for VAE encoder.
+    """
+    def __init__(self, inChannels: int, outChannels: int, norm: bool=True):
+        super().__init__()
+
+        layers = [nn.Conv2d(inChannels, outChannels, kernel_size=4, stride=2, padding=1, bias=False)]
+
+        # Add batch normalization if norm=True
+        if norm:
+            layers.append(nn.BatchNorm2d(outChannels))
+        
+        layers.append(nn.LeakyReLU(0.2, inplace=True))
+        self.block = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.block(x)
+    
+class UpsampleBlock(nn.Module):
+    """Upsample block for VAE decoder
+    """
+    def __init__(self, inChannels, outChannels, norm: bool=True):
+        super().__init__()
+
+        layers = [nn.ConvTranspose2d(inChannels, outChannels, kernel_size=4, stride=2, padding=1)]
+
+        if norm:
+            layers.append(nn.BatchNorm2d(outChannels))
+        
+        layers.append(nn.ReLU(inplace=True))
+        self.block = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.block(x)
+
+class VAE(nn.Module):
+    """Variation auto encoder model for image generation
+    """
+    def __init__(self, latentDim: int=100, imgChannels: int=3, imgDims: int=32):
+        super().__init__()
+        self.latentDim = latentDim
+        self.imgChannels = imgChannels
+
+        self.encoder = nn.Sequential(
+            DownsampleBlock(inChannels=imgChannels, outChannels=imgDims),
+            DownsampleBlock(inChannels=imgDims, outChannels=imgDims << 1),
+            DownsampleBlock(inChannels=imgDims << 1, outChannels=latentDim)
+        )
+
+        self.downsampledDims = imgDims >> 3 # imgDims >> n is for n downsampling
+        flatFeatSize = latentDim * self.downsampledDims ** 2 # size of flattened encoder output
+        self.flatten = nn.Flatten()
+        
+        self.mu = nn.Linear(in_features=flatFeatSize, out_features=latentDim)
+        self.logvar = nn.Linear(in_features=flatFeatSize, out_features=latentDim)
+
+        self.decoderInput = nn.Linear(latentDim, flatFeatSize)
+        self.decoder = nn.Sequential(
+            UpsampleBlock(inChannels=latentDim, outChannels=latentDim >> 1),
+            UpsampleBlock(inChannels=latentDim >> 1, outChannels=latentDim >> 2),
+            nn.ConvTranspose2d(latentDim >> 2, imgChannels, kernel_size=4, stride=2, padding=1),
+            nn.Tanh() # Want pixel values between [-1, 1]
+        )
+
+    # encode x -> μ, ln(σ^2)
+    def encode(self, x):
+        x = self.flatten(self.encoder(x))
+        return self.mu(x), self.logvar(x)
+
+    # z = μ + σ ⊙ ε
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar) # convert natural log of variance to standard deviation
+        eps = torch.randn_like(std) # sample from normal distribution
+        return mu + eps * std # z = mu + std ⊙ eps (⊙: element wise multiplication)
+        
+    # decode z -> x hat
+    def decode(self, z):
+        x = self.decoderInput(z)
+        x = x.view(-1, self.latentDim, self.downsampledDims, self.downsampledDims)
+        return self.decoder(x)
+
+    # x -> μ, ln(σ^2) -> z -> x hat, μ, ln(σ^2)
+    def forward(self, x):
+        mu, logvar = self.encode(x)
+        z = self.reparameterize(mu, logvar)
+        return self.decode(z), mu, logvar
+        
+def vaeLoss(xhat, x, mu, logvar):
+    reconLoss = nn.functional.mse_loss(xhat, x, reduction='sum')
+    klDiv = torch.sum(logvar.exp() + mu.pow(2) - (1 + logvar)) * 0.5
+    return reconLoss + klDiv
