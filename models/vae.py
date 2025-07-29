@@ -89,7 +89,7 @@ class VAE(nn.Module):
         z = self.reparameterize(mu, logvar)
         return self.decode(z), mu, logvar
         
-def vaeLoss(xhat, x, mu, logvar):
+def vaeLoss(xhat, x, mu, logvar, beta=1.0):
     reconLoss = nn.functional.mse_loss(xhat, x, reduction='sum')
     klDiv = torch.sum(logvar.exp() + mu.pow(2) - (1 + logvar)) * 0.5
-    return reconLoss + klDiv
+    return reconLoss + beta * klDiv, reconLoss, klDiv

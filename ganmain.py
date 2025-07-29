@@ -15,16 +15,19 @@ from utils.data import prepareData
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+# constants
 MANUALSEED = 42
+BATCHSIZE = 32
 
 if __name__=="__main__":
     # Prepare data loaders
-    trainDataloader = prepareData(seed=MANUALSEED)
-    testDataloader = prepareData(train=False)
+    trainDataloader = prepareData(batchSize=BATCHSIZE, seed=MANUALSEED)
+    testDataloader = prepareData(train=False, batchSize=BATCHSIZE)
 
+    LATENTDIM = 100
     torch.manual_seed(MANUALSEED)
     # Create instance of generator for GAN model
-    generator = Generator(latentDim=100, imgChannels=3, featureMapSize=64)
+    generator = Generator(latentDim=LATENTDIM, imgChannels=3, featureMapSize=64)
     generator.to(device) # send to chosen device (GPU if possible)
 
     # # Get a summary of generator (uncomment to see)
@@ -50,11 +53,11 @@ if __name__=="__main__":
     GANloss = nn.BCELoss()
 
     # Using learning rate a Beta 1 values proposed in DCGAN paper (https://arxiv.org/pdf/1511.06434)
-    lr = 2e-4
+    LR = 2e-4
     B1 = 0.5 # reduces momentum of the gradient (more responsive to fast-changing gradients)
     
-    optimizerD = torch.optim.Adam(discriminator.parameters(), lr=lr, betas=(B1, 0.999))
-    optimizerG = torch.optim.Adam(generator.parameters(), lr=lr, betas=(B1, 0.999))
+    optimizerD = torch.optim.Adam(discriminator.parameters(), lr=LR, betas=(B1, 0.999))
+    optimizerG = torch.optim.Adam(generator.parameters(), lr=LR, betas=(B1, 0.999))
 
     # Train GAN (use seed for reproducibility)
     EPOCHS = 150
