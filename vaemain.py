@@ -3,9 +3,9 @@ import torch
 from torchinfo import summary
 
 from utils.data import prepareData
-from models.vae import VAE, vaeLoss
+from models.vae import VAE, vaeLoss, AdaptiveMomentBetaScheduler
 from train.trainVae import train
-from utils.losses import plotVAELoss
+from utils.losses import plotVAELoss, plotVAELossAndBeta
 from utils.visualize import plotVAEDecoderSamples
 from utils.save import saveModelAndResultsMap
 
@@ -40,6 +40,10 @@ if __name__=="__main__":
 
     # Train VAE model
     EPOCHS = 150
+    BETA = 1.0
+
+    # Add beta scheduler
+    adaBetaScheduler = AdaptiveMomentBetaScheduler(betaInit=BETA)
 
     torch.manual_seed(MANUALSEED)
     VAEresults = train(model=vae,
@@ -47,18 +51,21 @@ if __name__=="__main__":
                        testDataloader=testDataloader,
                        optimizer=optimizer,
                        epochs=EPOCHS,
+                       beta=BETA,
                        device=device,
                        latentDim=LATENTDIM,
-                       decSamplesPerEpoch=5)
+                       decSamplesPerEpoch=5,
+                       betaScheduler=adaBetaScheduler)
     
     # Save the results and model
     saveModelAndResultsMap(model=vae, 
                            results=VAEresults, 
-                           modelName=f"VAE_CIFAR10_{EPOCHS}_EPOCHS_MODEL.pth",
-                           resultsName=f"VAE_CIFAR10_{EPOCHS}_EPOCHS_RESULTS.pth")
+                           modelName=f"BVAE_ADAPTIVE_CIFAR10_{EPOCHS}_1e-1Gamma_EPOCHS_MODEL.pth",
+                           resultsName=f"BVAE_ADAPTIVE_CIFAR10_{EPOCHS}_EPOCHS_1e-1Gamma_RESULTS.pth")
 
     # Plot loss curves for VAE
-    plotVAELoss(results=VAEresults)
+    # plotVAELoss(results=VAEresults)
+    plotVAELossAndBeta(results=VAEresults)
 
     # Plot the generated images from training loop
     plotVAEDecoderSamples(results=VAEresults, step=10)

@@ -93,3 +93,58 @@ def vaeLoss(xhat, x, mu, logvar, beta=1.0):
     reconLoss = nn.functional.mse_loss(xhat, x, reduction='sum')
     klDiv = torch.sum(logvar.exp() + mu.pow(2) - (1 + logvar)) * 0.5
     return reconLoss + beta * klDiv, reconLoss, klDiv
+
+class BetaScheduler:
+    def __init__(self, betaInit: float):
+        self.beta = betaInit
+    def update(self, Dkl: float, recon: float) -> float:
+        raise NotImplementedError("BetaScheduler.update() is not implemented. Please implement method.")
+
+class AdaptiveMomentBetaScheduler(BetaScheduler):
+    def __init__(self, 
+                 betaInit: float=1.0, # initial beta value
+                 gamma: float=0.1, # momentum value 
+                 eta: float=1.0, # how agressively beta is updated
+                 epsilon: float=1e-8, # arbitrarily small value > 0
+                 betaMin: float=0.1, # min for beta 
+                 betaMax: float=10.0 # max for beta
+                 ):
+        assert 0 < gamma <= 1, f"momentum value (gamma) must be in range 0 < gamma <= 1. Current value: gamma = {gamma}"
+        assert betaMin < betaMax, f"beta min must be less than beta max. Current values: Bmin = {betaMin}, Bmax = {betaMax}"
+        assert epsilon > 0, f"epsilon must be an arbitrarily small value greater than zero. Current value: epsilon = {epsilon}"
+        super().__init__(betaInit)
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.eta = eta
+        self.betaMin = betaMin
+        self.betaMax = betaMax
+        
+        self.momentumRatio = 1.0
+
+        self.Dkl = None
+        self.recon = None
+
+    def update(self, Dkl: float, recon: float) -> float:
+        if self.Dkl is None or self.recon is None:
+            self.Dkl = Dkl
+            self.recon = recon
+            return self.beta
+        
+        # Compute deltas of Dkl loss and reconstruction loss
+        DklGrad = 1 + (Dkl - self.Dkl) / (self.Dkl + self.epsilon)
+        reconGrad = 1 + (recon - self.recon) / (self.recon + self.epsilon)
+
+        # Compute ratio: ||∇Dkl|| / (||∇RL|| + epsilon)
+        ratio = DklGrad / (reconGrad + self.epsilon)
+        ratio = max(1e-3, min(ratio, 1e3))
+
+        # Update the momentum: momentumRatio * γ + (1 - γ) * ratio
+        self.momentumRatio = (self.momentumRatio * self.gamma) + ((1 - self.gamma) * ratio)
+
+        # Update beta: β = β0 * momentumRatio ** η
+        self.beta = self.beta * pow(self.momentumRatio, self.eta)
+
+        # Clip beta in range
+        self.beta = max(self.betaMin, min(self.beta, self.betaMax))
+
+        return self.beta

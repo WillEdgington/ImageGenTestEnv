@@ -81,3 +81,51 @@ def plotVAELoss(results):
     plt.legend()
 
     plt.show()
+
+def plotVAELossAndBeta(results):
+    trainLoss = results["train_loss"]
+    testLoss = results["test_loss"]
+
+    DklTrainLoss = results["Dkl_train_loss"]
+    DklTestLoss = results["Dkl_test_loss"]
+
+    reconTrainLoss = results["recon_train_loss"]
+    reconTestLoss = results["recon_test_loss"]
+
+    betas = results["beta_value"]
+
+    epochs = range(len(trainLoss))
+
+    plt.figure(figsize=(15,7))
+    
+    # Plot total loss
+    plt.subplot(2, 3, 1)
+    plt.plot(epochs, trainLoss, label="Train")
+    plt.plot(epochs, testLoss, label="Test")
+    plt.title("VAE Total Loss")
+    plt.xlabel("Epochs")
+    plt.legend()
+
+    # Plot beta value
+    plt.subplot(2, 3, 2)
+    plt.plot(epochs, betas)
+    plt.title("Beta Value")
+    plt.xlabel("Epochs")
+
+    # Plot KL divergence loss
+    plt.subplot(2, 3, 3)
+    plt.plot(epochs, DklTrainLoss, label="Train")
+    plt.plot(epochs, DklTestLoss, label="Test")
+    plt.title("KL Divergence Loss")
+    plt.xlabel("Epochs")
+    plt.legend()
+
+    # Plot reconstruction loss
+    plt.subplot(2, 3, 4)
+    plt.plot(epochs, reconTrainLoss, label="Train")
+    plt.plot(epochs, reconTestLoss, label="Test")
+    plt.title("Reconstruction Loss")
+    plt.xlabel("Epochs")
+    plt.legend()
+
+    plt.show()

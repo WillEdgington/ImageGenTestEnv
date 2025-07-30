@@ -3,7 +3,7 @@ import torch
 from tqdm.auto import tqdm
 from typing import Dict, List, Tuple
 
-from models.vae import vaeLoss, VAE
+from models.vae import vaeLoss, VAE, BetaScheduler
 
 def trainStep(model: torch.nn.Module, 
               dataloader: torch.utils.data.DataLoader,
@@ -74,7 +74,8 @@ def train(model: VAE,
           beta: float=1.0,
           device: torch.device="cuda" if torch.cuda.is_available() else "cpu",
           latentDim: int=100,
-          decSamplesPerEpoch: int=0) -> Dict[str, list]:
+          decSamplesPerEpoch: int=0,
+          betaScheduler: BetaScheduler | None=None) -> Dict[str, list]:
     assert decSamplesPerEpoch <= 10, f"genSamplesPerEpoch must be less than or equal to 10, currently it is {decSamplesPerEpoch}"
 
     results = {"train_loss": [],
@@ -83,6 +84,7 @@ def train(model: VAE,
                "test_loss": [],
                "Dkl_test_loss": [],
                "recon_test_loss": [],
+               "beta_value": [],
                "decoder_samples": [] if decSamplesPerEpoch else None}
     
     # Create sample noise that will be used to generate images per epoch
@@ -109,6 +111,10 @@ def train(model: VAE,
         results["Dkl_test_loss"].append(DklTestLoss)
         results["recon_test_loss"].append(reconTestLoss)
 
+        results["beta_value"].append(beta)
+        if betaScheduler:
+            beta = betaScheduler.update(Dkl=DklTrainLoss, recon=reconTrainLoss)
+
         # Generate samples from decoder
         if decSamplesPerEpoch:
             model.eval()
@@ -119,5 +125,7 @@ def train(model: VAE,
         # Print epoch and loss values
         print(f"\nEpoch: {epoch+1} | (Train) Total loss: {trainLoss:.4f}, Dkl loss: {DklTrainLoss:.4f}, Reconstruction loss: {reconTrainLoss:.4f} | "
               f"(Test) Total loss: {testLoss:.4f}, Dkl loss: {DklTestLoss:.4f}, Reconstruction loss: {reconTestLoss:.4f}")
+        if betaScheduler:
+            print(f"Updated Beta: {beta:.4f}")
     
     return results
