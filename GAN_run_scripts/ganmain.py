@@ -1,10 +1,15 @@
 import torch
 import matplotlib.pyplot as plt
+import sys
 
 from torch import nn
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 from torchinfo import summary
+from pathlib import Path
+
+# Add the parent directory to sys.path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from models.gan import Generator, Discriminator
 from train.trainGan import train

@@ -1,6 +1,11 @@
 import torch
+import sys
 
 from torchinfo import summary
+from pathlib import Path
+
+# Add the parent directory to sys.path
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from utils.save import loadModel, loadResultsMap
 from models.gan import Generator, Discriminator
