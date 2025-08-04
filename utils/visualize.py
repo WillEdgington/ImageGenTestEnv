@@ -74,7 +74,6 @@ def plotVAEDecoderSamples(results, step: int=1, title: str=""):
         # permute samples from BCHW -> BHWC (make matplotlib friendly)
         permutedSample = genSample.permute(0,2,3,1)
         for sampleIdx, img in enumerate(permutedSample):
-            img = img.numpy()
             img = (img + 1) / 2
 
             ax = axs[sampleIdx, col]
@@ -109,15 +108,17 @@ def visualiseVAELatentTraversal(vae: VAE,
                              device: torch.device="cuda" if torch.cuda.is_available() else "cpu"):
     vae.eval()
     imgsToPlot = []
+    labelsToPlot = []
     zVals = torch.linspace(start=minZ, end=maxZ, steps=steps)
 
     with torch.inference_mode():
-        for xBatch, _ in testDataloader:
+        for xBatch, yBatch in testDataloader:
             xBatch = xBatch.to(device)
             for i in range(xBatch.size(0)):
                 if len(imgsToPlot) == numSamples:
                     break
                 x = xBatch[i].unsqueeze(0)
+                y = yBatch[i].item()
                 mu, logvar = vae.encode(x)
                 
                 torch.manual_seed(seed)
@@ -133,6 +134,7 @@ def visualiseVAELatentTraversal(vae: VAE,
                     travRow.append(xhat)
                 
                 imgsToPlot.append(travRow)
+                labelsToPlot.append(testDataloader.dataset.classes[y])
             if len(imgsToPlot) == numSamples:
                 break
 
@@ -147,10 +149,12 @@ def visualiseVAELatentTraversal(vae: VAE,
             axes[row, col].imshow(imgsToPlot[row][col])
             axes[row, col].axis('off')
             if row == 0:
-                axes[row, col].set_title(f"{zVals[col]:.2f}")
-            
+                axes[row, col].set_title(f"{zVals[col]:.2f}", fontsize=10)
+            if col == 0:
+                axes[row, col].set_title(labelsToPlot[row], loc='left', fontsize=10)
+
+    fig.text(0.5, 0.04, 'Latent Value Offset', ha='center')
     plt.suptitle(f"{title} Latent space index: {latentIdx} Traversal")
-    plt.xlabel("Distance from original latent index value")
     plt.tight_layout()
     plt.show()
 

@@ -18,10 +18,10 @@ MANUALSEED = 42
 if __name__=="__main__":
     betas = [1.0, 4.0]
     useScheduler = [False, True]
-    latentDims = [50, 100]
+    latentDims = [50]
     batchSizes = [32]
     learningRates = [1e-4]
-    extraConvsArr = [0, 5]
+    extraConvsArr = [5]
     
     for beta in betas:
         for scheduler in useScheduler:
@@ -40,7 +40,14 @@ if __name__=="__main__":
                     modelName += f"{epochs}_EPOCHS_MODEL.pth"
                     vae = loadModel(model=VAE(latentDim=latentDim, upAddConv=extraConvs, downAddConv=extraConvs), modelName=modelName)
 
+                    # Get summary of model
+                    summary(model=vae,
+                        input_size=(1, 3, 32, 32),
+                        col_names=["input_size", "output_size", "num_params", "trainable"],
+                        col_width=20,
+                        row_settings=["var_names"])
+
                     title = f"VAE (Beta (initial): {beta}, Latent dimensions: {latentDim}, Extra Convs: {extraConvs}, AdaBeta: {scheduler})"
                     plotVAELossAndBeta(results=results, title=title)
-                    # plotVAEDecoderSamples(results=results, step=10, title=title)
+                    plotVAEDecoderSamples(results=results, step=10, title=title)
                     
