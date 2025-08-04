@@ -27,7 +27,7 @@ if __name__=="__main__":
     LATENTDIM = 100
     torch.manual_seed(MANUALSEED)
     # Create instance of Variational Auto Encoder (VAE) class
-    vae = VAE(latentDim=LATENTDIM, addConv=2)
+    vae = VAE(latentDim=LATENTDIM, upAddConv=2, downAddConv=2)
     vae.to(device)
 
     # Get a summary of the VAE (uncomment to see)

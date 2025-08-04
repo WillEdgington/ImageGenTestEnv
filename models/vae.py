@@ -5,25 +5,30 @@ from torch import nn
 class DownsampleBlock(nn.Module):
     """Downsample block for VAE encoder.
     """
-    def __init__(self, inChannels: int, outChannels: int, norm: bool=True, addConv: int=0):
+    def __init__(self, inChannels: int, outChannels: int, norm: bool=True, 
+                 addConv: int=0, convNorm: bool=False,
+                 downAct: nn.ReLU | nn.LeakyReLU | nn.SiLU | nn.GELU=nn.LeakyReLU(0.2, inplace=True),
+                 convAct: nn.ReLU | nn.LeakyReLU | nn.SiLU | nn.GELU=nn.LeakyReLU(0.2, inplace=True)):
         super().__init__()
 
-        downLayers = [nn.Conv2d(inChannels, outChannels, kernel_size=4, stride=2, padding=1, bias=False)]
+        downLayers = nn.ModuleList([nn.Conv2d(inChannels, outChannels, kernel_size=4, stride=2, padding=1, bias=False)])
 
         # Add batch normalization if norm=True
         if norm:
             downLayers.append(nn.BatchNorm2d(outChannels))
         
-        downLayers.append(nn.LeakyReLU(0.2, inplace=True))
+        downLayers.append(downAct)
         self.downsample = nn.Sequential(*downLayers)
 
         self.residual = False
         if addConv:
             self.residual = True
-            convLayers = []
+            convLayers = nn.ModuleList()
             for _ in range(addConv):
                 convLayers.append(nn.Conv2d(outChannels, outChannels, kernel_size=3, stride=1, padding=1, bias=False))
-                convLayers.append(nn.LeakyReLU(0.2, inplace=True))
+                if convNorm:
+                    convLayers.append(nn.BatchNorm2d(outChannels))
+                convLayers.append(convAct)
             self.conv = nn.Sequential(*convLayers)
 
     def forward(self, x):
@@ -33,24 +38,29 @@ class DownsampleBlock(nn.Module):
 class UpsampleBlock(nn.Module):
     """Upsample block for VAE decoder
     """
-    def __init__(self, inChannels, outChannels, norm: bool=True, addConv: int=0):
+    def __init__(self, inChannels, outChannels, norm: bool=True,
+                 addConv: int=0, convNorm: bool=False, 
+                 upAct: nn.ReLU | nn.LeakyReLU | nn.SiLU | nn.GELU=nn.ReLU(inplace=True),
+                 convAct: nn.ReLU | nn.LeakyReLU | nn.SiLU | nn.GELU=nn.ReLU(inplace=True)):
         super().__init__()
 
-        upLayers = [nn.ConvTranspose2d(inChannels, outChannels, kernel_size=4, stride=2, padding=1)]
+        upLayers = nn.ModuleList([nn.ConvTranspose2d(inChannels, outChannels, kernel_size=4, stride=2, padding=1)])
 
         if norm:
             upLayers.append(nn.BatchNorm2d(outChannels))
         
-        upLayers.append(nn.ReLU(inplace=True))
+        upLayers.append(upAct)
         self.upsample = nn.Sequential(*upLayers)
 
         self.residual = False
         if addConv:
             self.residual = True
-            convLayers = []
+            convLayers = nn.ModuleList()
             for _ in range(addConv):
                 convLayers.append(nn.Conv2d(outChannels, outChannels, kernel_size=3, stride=1, padding=1, bias=False))
-                convLayers.append(nn.ReLU(inplace=True))
+                if convNorm:
+                    convLayers.append(nn.BatchNorm2d(outChannels))
+                convLayers.append(convAct)
             self.conv = nn.Sequential(*convLayers)
 
     def forward(self, x):
@@ -60,15 +70,20 @@ class UpsampleBlock(nn.Module):
 class VAE(nn.Module):
     """Variation auto encoder model for image generation
     """
-    def __init__(self, latentDim: int=100, imgChannels: int=3, imgDims: int=32, addConv: int=0):
+    def __init__(self, latentDim: int=100, imgChannels: int=3, imgDims: int=32, 
+                 upAddConv: int=0, downAddConv: int=0, downConvNorm: bool=False, upConvNorm:bool=False,
+                 upAct: nn.ReLU | nn.LeakyReLU | nn.SiLU | nn.GELU=nn.ReLU(inplace=True),
+                 upExtraConvAct: nn.ReLU | nn.LeakyReLU | nn.SiLU | nn.GELU=nn.ReLU(inplace=True),
+                 downAct: nn.ReLU | nn.LeakyReLU | nn.SiLU | nn.GELU=nn.LeakyReLU(0.2, inplace=True),
+                 downExtraconvAct: nn.ReLU | nn.LeakyReLU | nn.SiLU | nn.GELU=nn.LeakyReLU(0.2, inplace=True)):
         super().__init__()
         self.latentDim = latentDim
         self.imgChannels = imgChannels
 
         self.encoder = nn.Sequential(
-            DownsampleBlock(inChannels=imgChannels, outChannels=imgDims, addConv=addConv),
-            DownsampleBlock(inChannels=imgDims, outChannels=imgDims << 1, addConv=addConv),
-            DownsampleBlock(inChannels=imgDims << 1, outChannels=latentDim, addConv=addConv)
+            DownsampleBlock(inChannels=imgChannels, outChannels=imgDims, addConv=downAddConv, convNorm=downConvNorm, downAct=downAct, convAct=downExtraconvAct),
+            DownsampleBlock(inChannels=imgDims, outChannels=imgDims << 1, addConv=downAddConv, convNorm=downConvNorm, downAct=downAct, convAct=downExtraconvAct),
+            DownsampleBlock(inChannels=imgDims << 1, outChannels=latentDim, addConv=downAddConv, convNorm=downConvNorm, downAct=downAct, convAct=downExtraconvAct)
         )
 
         self.downsampledDims = imgDims >> 3 # imgDims >> n is for n downsampling
@@ -80,8 +95,8 @@ class VAE(nn.Module):
 
         self.decoderInput = nn.Linear(latentDim, flatFeatSize)
         self.decoder = nn.Sequential(
-            UpsampleBlock(inChannels=latentDim, outChannels=latentDim >> 1, addConv=addConv),
-            UpsampleBlock(inChannels=latentDim >> 1, outChannels=latentDim >> 2, addConv=addConv),
+            UpsampleBlock(inChannels=latentDim, outChannels=latentDim >> 1, addConv=upAddConv, convNorm=upConvNorm, upAct=upAct, convAct=upExtraConvAct),
+            UpsampleBlock(inChannels=latentDim >> 1, outChannels=latentDim >> 2, addConv=upAddConv, convNorm=upConvNorm, upAct=upAct, convAct=upExtraConvAct),
             nn.ConvTranspose2d(latentDim >> 2, imgChannels, kernel_size=4, stride=2, padding=1),
             nn.Tanh() # Want pixel values between [-1, 1]
         )

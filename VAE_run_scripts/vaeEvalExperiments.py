@@ -38,9 +38,9 @@ if __name__=="__main__":
                     
                     epochs = len(results["train_loss"])
                     modelName += f"{epochs}_EPOCHS_MODEL.pth"
-                    vae = loadModel(model=VAE(latentDim=latentDim, addConv=extraConvs), modelName=modelName)
+                    vae = loadModel(model=VAE(latentDim=latentDim, upAddConv=extraConvs, downAddConv=extraConvs), modelName=modelName)
 
                     title = f"VAE (Beta (initial): {beta}, Latent dimensions: {latentDim}, Extra Convs: {extraConvs}, AdaBeta: {scheduler})"
                     plotVAELossAndBeta(results=results, title=title)
-                    plotVAEDecoderSamples(results=results, step=10, title=title)
+                    # plotVAEDecoderSamples(results=results, step=10, title=title)
                     

@@ -49,9 +49,9 @@ if __name__=="__main__":
                     
                     torch.manual_seed(MANUALSEED)
                     if epochsComplete == 0:
-                        vae = VAE(latentDim=latentDim, addConv=extraConvs)
+                        vae = VAE(latentDim=latentDim, upAddConv=extraConvs, downAddConv=extraConvs)
                     else:
-                        vae = loadModel(model=VAE(latentDim=latentDim, addConv=extraConvs),
+                        vae = loadModel(model=VAE(latentDim=latentDim, upAddConv=extraConvs, downAddConv=extraConvs),
                                         modelName=modelName + f"{epochsComplete}_EPOCHS_MODEL.pth")
                     vae.to(device)
 
