@@ -55,4 +55,7 @@ def loadModel(model: torch.nn.Module, modelName: str, modelDir: str="saved_model
     return model
 
 def loadResultsMap(resultsName: str, resultsDir: str="saved_results", device="cpu"):
-    return loadTorchObject(targetDir=resultsDir, fileName=resultsName, device=device)
+    try:
+        return loadTorchObject(targetDir=resultsDir, fileName=resultsName, device=device)
+    except:
+        return None

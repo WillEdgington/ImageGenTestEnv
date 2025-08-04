@@ -27,15 +27,15 @@ if __name__=="__main__":
     LATENTDIM = 100
     torch.manual_seed(MANUALSEED)
     # Create instance of Variational Auto Encoder (VAE) class
-    vae = VAE(latentDim=LATENTDIM)
+    vae = VAE(latentDim=LATENTDIM, addConv=2)
     vae.to(device)
 
-    # # Get a summary of the VAE (uncomment to see)
-    # summary(model=vae,
-    #         input_size=(1, 3, 32, 32),
-    #         col_names=["input_size", "output_size", "num_params", "trainable"],
-    #         col_width=20,
-    #         row_settings=["var_names"])
+    # Get a summary of the VAE (uncomment to see)
+    summary(model=vae,
+            input_size=(1, 3, 32, 32),
+            col_names=["input_size", "output_size", "num_params", "trainable"],
+            col_width=20,
+            row_settings=["var_names"])
 
     # set learning rate
     LR = 2e-4
@@ -44,11 +44,8 @@ if __name__=="__main__":
     optimizer = torch.optim.Adam(vae.parameters(), lr=LR)
 
     # Train VAE model
-    EPOCHS = 150
+    EPOCHS = 10
     BETA = 1.0
-
-    # Add beta scheduler
-    adaBetaScheduler = AdaptiveMomentBetaScheduler(betaInit=BETA)
 
     torch.manual_seed(MANUALSEED)
     VAEresults = train(model=vae,
@@ -59,18 +56,17 @@ if __name__=="__main__":
                        beta=BETA,
                        device=device,
                        latentDim=LATENTDIM,
-                       decSamplesPerEpoch=5,
-                       betaScheduler=adaBetaScheduler)
+                       decSamplesPerEpoch=5)
     
     # Save the results and model
-    saveModelAndResultsMap(model=vae, 
-                           results=VAEresults, 
-                           modelName=f"BVAE_ADAPTIVE_CIFAR10_{EPOCHS}_1e-1Gamma_EPOCHS_MODEL.pth",
-                           resultsName=f"BVAE_ADAPTIVE_CIFAR10_{EPOCHS}_EPOCHS_1e-1Gamma_RESULTS.pth")
+    # saveModelAndResultsMap(model=vae, 
+    #                        results=VAEresults, 
+    #                        modelName=f"VAE_CIFAR10_{EPOCHS}_EPOCHS_MODEL.pth",
+    #                        resultsName=f"VAE_CIFAR10_{EPOCHS}_EPOCHS_RESULTS.pth")
 
     # Plot loss curves for VAE
     # plotVAELoss(results=VAEresults)
-    plotVAELossAndBeta(results=VAEresults)
+    plotVAELoss(results=VAEresults)
 
     # Plot the generated images from training loop
-    plotVAEDecoderSamples(results=VAEresults, step=10)
+    plotVAEDecoderSamples(results=VAEresults, step=1)
