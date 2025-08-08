@@ -135,6 +135,10 @@ class BetaScheduler:
     def update(self, Dkl: float, recon: float) -> float:
         raise NotImplementedError("BetaScheduler.update() is not implemented. Please implement method.")
 
+
+# Could add a warmup so Dkl and recon can stabilise first before evaluating their relative gradients (attempt to fix exploding and vanishing beta)?
+# Could add entropy (make it more relevant to the initial objective of beta VAE)?
+# Finetune model (if we look at "Cyclical Annealing Schedule: A Simple Approach to Mitigating KL Vanishing" (Fu et al. 2019) they have an initial beta of 0)?
 class AdaptiveMomentBetaScheduler(BetaScheduler):
     def __init__(self, 
                  betaInit: float=1.0, # initial beta value

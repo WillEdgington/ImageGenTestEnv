@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from utils.losses import plotVAELossAndBeta, plotVAELoss
-from utils.visualize import plotVAEDecoderSamples, visualiseVAELatentTraversal
+from utils.visualize import plotVAEDecoderSamples, visualiseVAELatentTraversal, plotVAEDecoderSamples
 from utils.save import loadModel, loadResultsMap
 from utils.data import prepareData
 from models.vae import VAE
@@ -16,21 +16,24 @@ from models.vae import VAE
 MANUALSEED = 42
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-BETA = 1.0
-SCHEDULER = True
-LATENTDIMS = 50
-EXTRACONVS = 5
 EPOCHS = 100
+BETA = 1.0
+EXTRACONVS = 15
+NORMCONVS = False
+LATENTDIMS = 50
+SCHEDULER = True
+GAMMA=5e-2
 
-ADAPTIVESTR = "_ADAPTIVE_" if SCHEDULER else ""
-MODELNAME = f"VAE_CIFAR10_{int(BETA)}_BETA{ADAPTIVESTR}_{LATENTDIMS}_ZDIMS_{EXTRACONVS}_CONVS_{EPOCHS}_EPOCHS_MODEL.pth"
-RESULTSNAME = f"VAE_CIFAR10_{int(BETA)}_BETA{ADAPTIVESTR}_{LATENTDIMS}_ZDIMS_{EXTRACONVS}_CONVS_RESULTS.pth"
+NORMCONVSSTR = "_NORM" if NORMCONVS else ""
+ADAPTIVESTR = "_ADAPTIVE_" + (f"{str(GAMMA)[2:]}_GAMMA" if GAMMA else "") if SCHEDULER else ""
+MODELNAME = f"VAE_CIFAR10_{int(BETA)}_BETA{ADAPTIVESTR}_{LATENTDIMS}_ZDIMS_{EXTRACONVS}_CONVS{NORMCONVSSTR}_{EPOCHS}_EPOCHS_MODEL.pth"
+RESULTSNAME = f"VAE_CIFAR10_{int(BETA)}_BETA{ADAPTIVESTR}_{LATENTDIMS}_ZDIMS_{EXTRACONVS}_CONVS{NORMCONVSSTR}_RESULTS.pth"
 
-TITLE = f"VAE (Beta (initial): {BETA}, Latent dimensions: {LATENTDIMS}, Extra Convs: {EXTRACONVS}, AdaBeta: {SCHEDULER})"
+TITLE = f"VAE (Beta (initial): {BETA}, Latent dimensions: {LATENTDIMS}, Extra Convs: {EXTRACONVS}{NORMCONVSSTR}, AdaBeta: {SCHEDULER})"
 
 if __name__=="__main__":
     testDataloader = prepareData(train=False)
-    vae = loadModel(model=VAE(latentDim=LATENTDIMS, upAddConv=EXTRACONVS, downAddConv=EXTRACONVS), modelName=MODELNAME)
+    vae = loadModel(model=VAE(latentDim=LATENTDIMS, upAddConv=EXTRACONVS, downAddConv=EXTRACONVS, upConvNorm=NORMCONVS, downConvNorm=NORMCONVS), modelName=MODELNAME)
     vae.to(device)
 
     results = loadResultsMap(resultsName=RESULTSNAME)
@@ -43,6 +46,8 @@ if __name__=="__main__":
             row_settings=["var_names"])
     
     plotVAELossAndBeta(results=results, title=TITLE)
+
+    plotVAEDecoderSamples(results=results, step=10, title=TITLE)
     
     std = results["latent_dims_std_train"][EPOCHS - 1]
     for i in range(LATENTDIMS):

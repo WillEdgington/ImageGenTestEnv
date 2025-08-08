@@ -18,16 +18,20 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 MANUALSEED = 42
 BATCHSIZE = 32
+LR = 1e-4
+SAVEPOINT = 50
 EPOCHS = 100
 BETA = 1.0
-LR = 1e-4
 EXTRACONVS = 15
+NORMCONVS = True
 LATENTDIMS = 50
 SCHEDULER = True
+GAMMA = 5e-2
 
-ADAPTIVESTR = "_ADAPTIVE_" if SCHEDULER else ""
-MODELNAME = f"VAE_CIFAR10_{int(BETA)}_BETA{ADAPTIVESTR}_{LATENTDIMS}_ZDIMS_{EXTRACONVS}_CONVS"
-RESULTSNAME = f"VAE_CIFAR10_{int(BETA)}_BETA{ADAPTIVESTR}_{LATENTDIMS}_ZDIMS_{EXTRACONVS}_CONVS_RESULTS.pth"
+ADAPTIVESTR = "_ADAPTIVE_" + (f"{str(GAMMA)[2:]}_GAMMA" if GAMMA else "") if SCHEDULER else ""
+NORMCONVSSTR = "_NORM" if NORMCONVS else ""
+MODELNAME = f"VAE_CIFAR10_{int(BETA)}_BETA{ADAPTIVESTR}_{LATENTDIMS}_ZDIMS_{EXTRACONVS}_CONVS{NORMCONVSSTR}"
+RESULTSNAME = f"VAE_CIFAR10_{int(BETA)}_BETA{ADAPTIVESTR}_{LATENTDIMS}_ZDIMS_{EXTRACONVS}_CONVS{NORMCONVSSTR}_RESULTS.pth"
 
 if __name__=="__main__":
     # create CIFAR-10 dataloaders
@@ -35,7 +39,7 @@ if __name__=="__main__":
     testDataloader = prepareData(train=False, batchSize=BATCHSIZE)
 
     torch.manual_seed(MANUALSEED)
-    vae = VAE(latentDim=LATENTDIMS, upAddConv=EXTRACONVS, downAddConv=EXTRACONVS, downConvNorm=True, upConvNorm=True)
+    vae = VAE(latentDim=LATENTDIMS, upAddConv=EXTRACONVS, downAddConv=EXTRACONVS, downConvNorm=NORMCONVS, upConvNorm=NORMCONVS)
     vae.to(device)
 
 
@@ -44,8 +48,8 @@ if __name__=="__main__":
             col_names=["input_size", "output_size", "num_params", "trainable"],
             col_width=20,
             row_settings=["var_names"])
-    
-    betaScheduler = AdaptiveMomentBetaScheduler()
+    print(f"model name: {MODELNAME}")
+    betaScheduler = AdaptiveMomentBetaScheduler(gamma=GAMMA)
 
     optimizer = torch.optim.Adam(vae.parameters(), lr=LR)
     completedEpochs = 0
@@ -57,13 +61,16 @@ if __name__=="__main__":
                         trainDataloader=trainDataloader,
                         testDataloader=testDataloader,
                         optimizer=optimizer,
-                        epochs=EPOCHS,
+                        epochs=SAVEPOINT,
                         beta=betaScheduler.beta,
                         device=device,
                         latentDim=LATENTDIMS,
+                        countActiveDims=True,
                         betaScheduler=betaScheduler,
                         results=VAEresults,
                         decSamplesPerEpoch=5)
+        
+        completedEpochs = len(VAEresults["train_loss"])
         
         # Save the results and model
         saveModelAndResultsMap(model=vae, 
@@ -73,7 +80,7 @@ if __name__=="__main__":
 
     # Plot loss curves for VAE
     # plotVAELoss(results=VAEresults)
-    plotVAELoss(results=VAEresults)
+    plotVAELossAndBeta(results=VAEresults)
 
     # Plot the generated images from training loop
     plotVAEDecoderSamples(results=VAEresults, step=10)
