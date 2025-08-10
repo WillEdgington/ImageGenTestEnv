@@ -33,8 +33,8 @@ BATCHSIZE = 32
 EPOCHS = 10
 
 if __name__=="__main__":
-    trainDataloader = prepareData(batchSize=BATCHSIZE, seed=MANUALSEED)
-    testDataloader = prepareData(train=False, batchSize=BATCHSIZE)
+    trainDataloader = prepareData(batchSize=BATCHSIZE, seed=MANUALSEED, normalize=False)
+    testDataloader = prepareData(train=False, batchSize=BATCHSIZE, normalize=False)
 
     unet = UNet(imgInChannels=IMGCHANNELS,
                 imgOutChannnels=IMGCHANNELS,
@@ -66,4 +66,6 @@ if __name__=="__main__":
                     noiseScheduler=noiseScheduler,
                     epochs=EPOCHS,
                     results=None,
+                    numGeneratedSamples=5,
+                    imgShape=(3,32,32),
                     device=device)

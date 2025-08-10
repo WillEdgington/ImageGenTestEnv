@@ -207,3 +207,51 @@ class UNet(nn.Module):
             x = dec(x, timeEmb)
 
         return self.final(x)
+    
+@torch.no_grad
+def sample(model: torch.nn.Module,
+           noiseScheduler: NoiseScheduler,
+           xT: torch.Tensor,
+           skip: int=1,
+           device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> torch.Tensor:
+    timesteps = noiseScheduler.timesteps
+    assert skip <= timesteps, f"skip variable must be less than or equal to T. T: {timesteps}"
+
+    xT = xT.to(device)
+    xt = xT
+
+    while timesteps > 0:
+        timesteps -= skip
+        xt = sampleStep(model=model,
+                        noiseScheduler=noiseScheduler,
+                        xt=xt,
+                        t=timesteps,
+                        skip=skip,
+                        device=device)
+
+    return xt
+
+def sampleStep(model: torch.nn.Module,
+               noiseScheduler: NoiseScheduler,
+               xt: torch.Tensor,
+               t: int,
+               skip: int=1,
+               device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> torch.Tensor:
+    skip = min(skip, t)
+
+    alphahatt = noiseScheduler.getNoiseLevel(t)
+    alphahatprev = noiseScheduler.getNoiseLevel(t - skip)
+
+    alphattoprev = alphahatprev / alphahatt
+
+    eps = model(xt, torch.tensor([t], device=device, dtype=torch.int64))
+
+    coef1 = 1 / torch.sqrt(alphattoprev)
+    coef2 = (1 - alphattoprev) / torch.sqrt(1 - alphahatt)
+    mu = coef1 * (xt - (coef2 * eps))
+
+    sigma = torch.sqrt((1 - alphahatprev) - alphattoprev * (1 - alphahatt))
+
+    z = torch.randn_like(xt) if (t - skip) > 0 else torch.zeros_like(xt) # dont add noise to x0
+
+    return mu + (sigma * z)

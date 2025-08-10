@@ -3,7 +3,7 @@ import torch
 from tqdm.auto import tqdm
 from typing import Dict, List, Tuple
 
-from models.diffusion import NoiseScheduler
+from models.diffusion import NoiseScheduler, sample
 
 def trainStep(model: torch.nn.Module,
               dataloader: torch.utils.data.DataLoader,
@@ -92,12 +92,19 @@ def train(model: torch.nn.Module,
           noiseScheduler: NoiseScheduler,
           epochs: int=5,
           results: Dict[str, list] | None=None,
+          numGeneratedSamples: int=0,
+          imgShape: Tuple[int, int, int] | None=None, # (C,H,W)
           device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> Dict[str, list]:
     model.to(device)
     
     if not results:
         results = {"train_loss": [],
-                "test_loss": []}
+                "test_loss": [],
+                "generated_samples": []}
+        
+    if numGeneratedSamples > 0:
+        assert imgShape is not None, "imgShape for generated samples cannot be None."
+        xTbatch = torch.randn(numGeneratedSamples, imgShape[0], imgShape[1], imgShape[2], device=device)
 
     for epoch in tqdm(range(epochs)):
         trainLoss = trainStep(model=model,
@@ -114,5 +121,15 @@ def train(model: torch.nn.Module,
                             noiseScheduler=noiseScheduler,
                             device=device)
         results["test_loss"].append(testLoss)
+
+        if numGeneratedSamples > 0:
+            model.eval()
+            x0 = sample(model=model,
+                        noiseScheduler=noiseScheduler,
+                        xT=xTbatch,
+                        skip=1,
+                        device=device)
+            results["generated_samples"].append(x0)
+            
 
         print(f"\nEpochs: {epoch+1} | (Train) Loss: {trainLoss} | (Test) Loss: {testLoss}")
