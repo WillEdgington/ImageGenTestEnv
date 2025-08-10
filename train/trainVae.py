@@ -25,7 +25,7 @@ def trainStep(model: VAE,
         activeDims, latentStd = 0, 0
 
     for x, _ in dataloader:
-        x.to(device)
+        x = x.to(device)
 
         # Forward pass through model
         xhat, mu, logvar = model(x)
@@ -114,6 +114,7 @@ def train(model: VAE,
           betaScheduler: BetaScheduler | None=None,
           results: Dict[str, list] | None=None) -> Dict[str, list]:
     assert decSamplesPerEpoch <= 10, f"genSamplesPerEpoch must be less than or equal to 10, currently it is {decSamplesPerEpoch}"
+    model.to(device)
 
     if not results:
         results = {"train_loss": [],

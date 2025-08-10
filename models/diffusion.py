@@ -31,7 +31,7 @@ class LinearNoiseScheduler(NoiseScheduler):
         return torch.linspace(self.betaStart, self.betaEnd, self.timesteps)
 
     def getNoiseLevel(self, t):
-        return self.alphahat[t]
+        return self.alphahat.to(t.device)[t]
     
 class CosineNoiseScheduler(NoiseScheduler):
     def __init__(self, timesteps: int, s: float=8e-3):
@@ -48,7 +48,7 @@ class CosineNoiseScheduler(NoiseScheduler):
         return torch.clip(betas, 1e-4, 0.9999)
     
     def getNoiseLevel(self, t):
-        return self.alphahat[t]
+        return self.alphahat.to(t.device)[t]
     
 class SinusoidalTimeEmbedding(nn.Module):
     def __init__(self, dim: int):
