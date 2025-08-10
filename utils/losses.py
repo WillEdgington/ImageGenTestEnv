@@ -154,3 +154,18 @@ def plotVAELossAndBeta(results, title: str=""):
 
     plt.suptitle(t=title)
     plt.show()
+
+def plotDiffusionLoss(results, title: str=""):
+    difTrainLoss = results["train_loss"]
+    difTestLoss = results["test_loss"]
+
+    epochs = range(len(difTrainLoss))
+
+    plt.figure(figsize=(15,7))
+    plt.plot(epochs, difTrainLoss, label="Train")
+    plt.plot(epochs, difTestLoss, label="Test")
+    plt.title(title + "Loss")
+    plt.xlabel("Epochs")
+    plt.legend()
+
+    plt.show()

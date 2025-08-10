@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from utils.data import prepareData
-from utils.save import saveModelAndResultsMap
+from utils.save import saveModelAndResultsMap, loadResultsMap, loadModel
 from models.diffusion import UNet, LinearNoiseScheduler
 from train.trainDiffusion import train
 
@@ -31,6 +31,10 @@ TIMESTEPS = 10
 LR = 2e-4
 BATCHSIZE = 32
 EPOCHS = 10
+SAVEPOINT = 10
+
+RESULTSNAME = f"DIFFUSION_CIFAR10_RESULTS.pth"
+MODELNAME = f"DIFFUSION_CIFAR10_"
 
 if __name__=="__main__":
     trainDataloader = prepareData(batchSize=BATCHSIZE, seed=MANUALSEED, normalize=False)
@@ -58,14 +62,24 @@ if __name__=="__main__":
     optimizer = torch.optim.Adam(params=unet.parameters(), lr=LR)
     noiseScheduler = LinearNoiseScheduler(timesteps=TIMESTEPS)
 
-    results = train(model=unet,
-                    trainDataloader=trainDataloader,
-                    testDataloader=testDataloader,
-                    optimizer=optimizer,
-                    lossFn=lossFn,
-                    noiseScheduler=noiseScheduler,
-                    epochs=EPOCHS,
-                    results=None,
-                    numGeneratedSamples=5,
-                    imgShape=(3,32,32),
-                    device=device)
+    results = loadResultsMap(resultsName=RESULTSNAME)
+    epochscomplete = 0
+
+    if results is not None:
+        epochscomplete = len(results["train_loss"])
+
+    while epochscomplete < EPOCHS:
+        torch.manual_seed(MANUALSEED)
+        results = train(model=unet,
+                        trainDataloader=trainDataloader,
+                        testDataloader=testDataloader,
+                        optimizer=optimizer,
+                        lossFn=lossFn,
+                        noiseScheduler=noiseScheduler,
+                        epochs=SAVEPOINT,
+                        results=results,
+                        numGeneratedSamples=5,
+                        imgShape=(3,32,32),
+                        device=device)
+
+        saveModelAndResultsMap(model=unet, results=results, modelName=MODELNAME+f"{epochscomplete}_EPOCHS_MODEL.pth", resultsName=RESULTSNAME)
