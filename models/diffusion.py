@@ -2,6 +2,7 @@ import torch
 import math
 
 from torch import nn
+from typing import List, Tuple
 
 # aka: Beta Scheduler
 class NoiseScheduler:
@@ -213,45 +214,57 @@ def sample(model: torch.nn.Module,
            noiseScheduler: NoiseScheduler,
            xT: torch.Tensor,
            skip: int=1,
-           device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> torch.Tensor:
+           eta: float=1.0,
+           getSteps: int | None=None,
+           device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> torch.Tensor | List[Tuple[int, torch.Tensor]]:
     timesteps = noiseScheduler.timesteps
     assert skip <= timesteps, f"skip variable must be less than or equal to T. T: {timesteps}"
+    assert (getSteps is None) or (getSteps % skip == 0), f"getSteps must be divisible by skip. getSteps: {getSteps}, skip: {skip}"
 
-    xT = xT.to(device)
-    xt = xT
+    xt = xT.to(device)
 
-    while timesteps > 0:
-        timesteps -= skip
+    if getSteps is not None:
+        samples = []
+    t = timesteps
+
+    while t > 0:
+        if getSteps is not None and (timesteps - t) % getSteps == 0:
+            samples.append((t, xt))
+        t -= skip
         xt = sampleStep(model=model,
                         noiseScheduler=noiseScheduler,
                         xt=xt,
-                        t=timesteps,
+                        t=t,
                         skip=skip,
+                        eta=eta,
                         device=device)
+    
+    if getSteps is not None:
+        samples.append((0, xt))
 
-    return xt
+    return xt if getSteps is None else samples
 
 def sampleStep(model: torch.nn.Module,
                noiseScheduler: NoiseScheduler,
                xt: torch.Tensor,
                t: int,
                skip: int=1,
+               eta: float=1.0,
                device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> torch.Tensor:
+    batchSize = xt.shape[0]
     skip = min(skip, t)
 
-    alphahatt = noiseScheduler.getNoiseLevel(t)
-    alphahatprev = noiseScheduler.getNoiseLevel(t - skip)
+    tBatch = torch.full((batchSize,), t, device=device, dtype=torch.int64)
+    skipBatch = torch.full((batchSize,), skip, device=device, dtype=torch.int64)
 
-    alphattoprev = alphahatprev / alphahatt
+    alphahatt = noiseScheduler.getNoiseLevel(tBatch).view(batchSize, 1, 1, 1)
+    alphahatprev = noiseScheduler.getNoiseLevel(t - skipBatch).view(batchSize, 1, 1, 1)
 
-    eps = model(xt, torch.tensor([t], device=device, dtype=torch.int64))
+    eps = model(xt, tBatch)
+    x0pred = (xt - torch.sqrt(1 - alphahatt) * eps) / torch.sqrt(alphahatt)
 
-    coef1 = 1 / torch.sqrt(alphattoprev)
-    coef2 = (1 - alphattoprev) / torch.sqrt(1 - alphahatt)
-    mu = coef1 * (xt - (coef2 * eps))
-
-    sigma = torch.sqrt((1 - alphahatprev) - alphattoprev * (1 - alphahatt))
-
+    sigma = eta * torch.sqrt((1 - alphahatprev) / (1 - alphahatt)) * torch.sqrt(1 - alphahatt / alphahatprev)
+    mu = torch.sqrt(alphahatprev) * x0pred + torch.sqrt(1 - alphahatprev - sigma**2) * eps
     z = torch.randn_like(xt) if (t - skip) > 0 else torch.zeros_like(xt) # dont add noise to x0
 
     return mu + (sigma * z)

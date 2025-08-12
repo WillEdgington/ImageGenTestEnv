@@ -29,7 +29,7 @@ def trainStep(model: torch.nn.Module,
 
         # Compute xt
         alphahatt = noiseScheduler.getNoiseLevel(t).view(batchSize, 1, 1, 1)
-        xt = torch.sqrt(alphahatt) * x + torch.sqrt(1 - alphahatt) * noise
+        xt = (torch.sqrt(alphahatt) * x) + (torch.sqrt(1 - alphahatt) * noise)
 
         # Forward pass xt, t through model
         predNoise = model(xt, t)
@@ -71,7 +71,7 @@ def testStep(model: torch.nn.Module,
 
             # Compute xt
             alphahatt = noiseScheduler.getNoiseLevel(t).view(batchSize, 1, 1, 1)
-            xt = torch.sqrt(alphahatt) * x + torch.sqrt(1 - alphahatt) * noise
+            xt = (torch.sqrt(alphahatt) * x) + (torch.sqrt(1 - alphahatt) * noise)
 
             # Forward pass xt, t through model
             predNoise = model(xt, t)
@@ -94,19 +94,26 @@ def train(model: torch.nn.Module,
           results: Dict[str, list] | None=None,
           numGeneratedSamples: int=0,
           imgShape: Tuple[int, int, int] | None=None, # (C,H,W)
+          sampleEta: float=1.0,
+          seed: int=42,
           device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> Dict[str, list]:
     model.to(device)
     
-    if not results:
+    initialEpoch = 1
+    if results is not None:
+        initialEpoch += len(results["train_loss"])
+    else:
         results = {"train_loss": [],
-                "test_loss": [],
-                "generated_samples": []}
+                   "test_loss": [],
+                   "generated_samples": []}
         
+    torch.manual_seed(seed)
     if numGeneratedSamples > 0:
         assert imgShape is not None, "imgShape for generated samples cannot be None."
         xTbatch = torch.randn(numGeneratedSamples, imgShape[0], imgShape[1], imgShape[2], device=device)
 
     for epoch in tqdm(range(epochs)):
+        torch.manual_seed(seed+epoch)
         trainLoss = trainStep(model=model,
                               dataloader=trainDataloader,
                               optimizer=optimizer,
@@ -123,13 +130,17 @@ def train(model: torch.nn.Module,
         results["test_loss"].append(testLoss)
 
         if numGeneratedSamples > 0:
+            # torch.manual_seed(seed)
             model.eval()
             x0 = sample(model=model,
                         noiseScheduler=noiseScheduler,
                         xT=xTbatch,
                         skip=1,
+                        eta=sampleEta,
                         device=device)
             results["generated_samples"].append(x0)
             
 
-        print(f"\nEpochs: {epoch+1} | (Train) Loss: {trainLoss} | (Test) Loss: {testLoss}")
+        print(f"\nEpochs: {epoch+initialEpoch} | (Train) Loss: {trainLoss:.4f} | (Test) Loss: {testLoss:.4f}")
+    
+    return results

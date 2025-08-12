@@ -10,7 +10,9 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from utils.data import prepareData
 from utils.save import saveModelAndResultsMap, loadResultsMap, loadModel
-from models.diffusion import UNet, LinearNoiseScheduler
+from utils.visualize import plotDiffusionSamples, plotDiffusionTtraversalSamples, plotForwardDiffusion
+from utils.losses import plotDiffusionLoss
+from models.diffusion import UNet, LinearNoiseScheduler, CosineNoiseScheduler
 from train.trainDiffusion import train
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -23,23 +25,27 @@ DEPTH = 3
 ENCHEADS = 2
 DECHEADS = 2
 BOTHEADS = 2
-ENCHEADDROP = 0
-DECHEADDROP = 0
-BOTHEADDROP = 0
-TIMESTEPS = 10
+ENCHEADDROP = 0.1
+DECHEADDROP = 0.1
+BOTHEADDROP = 0.1
+TIMESTEPS = 1000
 
-LR = 2e-4
-BATCHSIZE = 32
-EPOCHS = 10
+LR = 1e-4
+BATCHSIZE = 64
+EPOCHS = 300
 SAVEPOINT = 10
 
 RESULTSNAME = f"DIFFUSION_CIFAR10_RESULTS.pth"
-MODELNAME = f"DIFFUSION_CIFAR10_"
+MODELNAME = f"DIFFUSION_CIFAR10"
 
 if __name__=="__main__":
-    trainDataloader = prepareData(batchSize=BATCHSIZE, seed=MANUALSEED, normalize=False)
-    testDataloader = prepareData(train=False, batchSize=BATCHSIZE, normalize=False)
+    trainDataloader = prepareData(batchSize=BATCHSIZE, seed=MANUALSEED)
+    testDataloader = prepareData(train=False, batchSize=BATCHSIZE)
 
+    results = loadResultsMap(resultsName=RESULTSNAME)
+    epochscomplete = len(results["train_loss"]) if results is not None else 0
+
+    torch.manual_seed(MANUALSEED)
     unet = UNet(imgInChannels=IMGCHANNELS,
                 imgOutChannnels=IMGCHANNELS,
                 timeEmbDim=TIMEEMBDIM,
@@ -52,6 +58,9 @@ if __name__=="__main__":
                 decHeadsDropout=DECHEADDROP,
                 botHeadsDropout=BOTHEADDROP)
 
+    if epochscomplete > 0:
+        unet = loadModel(model=unet, modelName=MODELNAME+f"_{epochscomplete}_EPOCHS_MODEL.pth", device=device)
+
     summary(model=unet,
             input_size=[(1, 3, 32, 32),(1,)],
             col_names=["input_size", "output_size", "num_params", "trainable"],
@@ -60,16 +69,16 @@ if __name__=="__main__":
     
     lossFn = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(params=unet.parameters(), lr=LR)
-    noiseScheduler = LinearNoiseScheduler(timesteps=TIMESTEPS)
+    noiseScheduler = CosineNoiseScheduler(timesteps=TIMESTEPS)
 
-    results = loadResultsMap(resultsName=RESULTSNAME)
-    epochscomplete = 0
-
-    if results is not None:
-        epochscomplete = len(results["train_loss"])
+    plotForwardDiffusion(dataloader=testDataloader,
+                         noiseScheduler=noiseScheduler,
+                         numSamples=3,
+                         step=100,
+                         title="",
+                         seed=MANUALSEED)
 
     while epochscomplete < EPOCHS:
-        torch.manual_seed(MANUALSEED)
         results = train(model=unet,
                         trainDataloader=trainDataloader,
                         testDataloader=testDataloader,
@@ -80,6 +89,34 @@ if __name__=="__main__":
                         results=results,
                         numGeneratedSamples=5,
                         imgShape=(3,32,32),
+                        sampleEta=1.0,
+                        seed=MANUALSEED,
                         device=device)
+        
+        epochscomplete = len(results["train_loss"])
 
-        saveModelAndResultsMap(model=unet, results=results, modelName=MODELNAME+f"{epochscomplete}_EPOCHS_MODEL.pth", resultsName=RESULTSNAME)
+        saveModelAndResultsMap(model=unet, results=results, modelName=MODELNAME+f"_{epochscomplete}_EPOCHS_MODEL.pth", resultsName=RESULTSNAME)
+
+
+    plotDiffusionLoss(results=results)
+    plotDiffusionSamples(results=results, step=10)
+    plotDiffusionTtraversalSamples(model=unet,
+                                   noiseScheduler=noiseScheduler,
+                                   numSamples=3,
+                                   imgShape=(3, 32, 32),
+                                   step=100,
+                                   skip=1,
+                                   eta=1.0,
+                                   title="",
+                                   seed=MANUALSEED,
+                                   device=device)
+    plotDiffusionTtraversalSamples(model=unet,
+                                   noiseScheduler=noiseScheduler,
+                                   numSamples=3,
+                                   imgShape=(3, 32, 32),
+                                   step=100,
+                                   skip=20,
+                                   eta=1.0,
+                                   title="",
+                                   seed=MANUALSEED,
+                                   device=device)

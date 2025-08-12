@@ -1,11 +1,13 @@
 import torch
-
 import matplotlib.pyplot as plt
 import numpy as np
 
-from models.vae import VAE
+from typing import Dict, Tuple
 
-def plotGANGeneratorSamples(results, step: int=1):
+from models.vae import VAE
+from models.diffusion import NoiseScheduler, sample
+
+def plotGANGeneratorSamples(results: Dict[str, list], step: int=1):
     genSamples = results["generator_samples"]
     epochs = len(genSamples)
     imgsPerSample = genSamples[0].size(0)
@@ -51,7 +53,7 @@ def plotGANGeneratorSamples(results, step: int=1):
     plt.tight_layout(rect=(0, 0, 1, 0.95))
     plt.show()
 
-def plotVAEDecoderSamples(results, step: int=1, title: str=""):
+def plotVAEDecoderSamples(results: Dict[str, list], step: int=1, title: str=""):
     genSamples = results["decoder_samples"]
     epochs = len(genSamples)
     imgsPerSample = genSamples[0].size(0)
@@ -158,5 +160,145 @@ def visualiseVAELatentTraversal(vae: VAE,
     plt.tight_layout()
     plt.show()
 
+def plotDiffusionSamples(results: Dict[str, list],
+                         step: int=1,
+                         title: str=""):
+    genSamples = results["generated_samples"]
+    epochs = len(genSamples)
+    imgsPerSample = genSamples[0].size(0)
 
+    assert epochs >= step, f"No epochs matched the step={step}. try a smaller step"
+
+    selectedEpochs = [i for i in range(step, epochs+1, step)]
+    selectedSamples = [genSamples[i-1] for i in selectedEpochs]
+    numCols = len(selectedEpochs)
+
+    fig, axs = plt.subplots(nrows=imgsPerSample,
+                            ncols=numCols,
+                            figsize=(epochs, imgsPerSample))
     
+    for col, genSample in enumerate(selectedSamples):
+        genSample = genSample.detach().cpu()
+
+        permutedSample = genSample.permute(0, 2, 3, 1)
+        for sampleIdx, img in enumerate(permutedSample):
+            img = (torch.clamp(img, -1, 1) + 1) / 2
+
+            ax = axs[sampleIdx, col]
+            ax.imshow(img.squeeze(), cmap="gray" if img.shape[-1]==1 else None)
+            ax.axis("off")
+
+    bigAx = fig.add_subplot(111, frameon=False)
+    bigAx.set_xticks(np.arange(numCols))
+    bigAx.set_yticks(np.arange(imgsPerSample))
+
+    bigAx.set_xticklabels([f"{e}" for e in selectedEpochs])
+    bigAx.set_yticklabels([f"{i}" for i in range(imgsPerSample)])
+
+    bigAx.set_xlabel("Epoch")
+    bigAx.set_ylabel("Latent Sample")
+    bigAx.tick_params(labelcolor='black', top=False, bottom=False, left=False, right=False)
+
+    fig.suptitle(title + f" Generated Images", fontsize=16)
+
+    plt.tight_layout()
+    plt.show()
+
+def plotDiffusionTtraversalSamples(model: torch.nn.Module,
+                                   noiseScheduler: NoiseScheduler,
+                                   numSamples: int=1,
+                                   imgShape: Tuple[int, int, int]=(3,32,32),
+                                   step: int=10,
+                                   skip: int=1,
+                                   eta: float=1.0,
+                                   title: str="",
+                                   seed: int | None=None,
+                                   device: torch.device="cuda" if torch.cuda.is_available() else "cpu"):
+    assert step < noiseScheduler.timesteps, f"sample step must be less than total timesteps. step: {step}, timesteps: {noiseScheduler.timesteps}"
+    
+    if seed is not None:
+        torch.manual_seed(seed)
+    xTbatch = torch.randn(numSamples, imgShape[0], imgShape[1], imgShape[2], device=device)
+    xtsamples = sample(model=model,
+                       noiseScheduler=noiseScheduler,
+                       xT=xTbatch,
+                       skip=skip,
+                       eta=eta,
+                       getSteps=step,
+                       device=device)
+    
+    fig, axes = plt.subplots(nrows=numSamples,
+                            ncols=len(xtsamples),
+                            figsize=(len(xtsamples), numSamples))
+    
+    if numSamples == 1:
+        axes = axes[np.newaxis, :]
+    
+    for row in range(numSamples):
+        for col in range(len(xtsamples)):
+            img = xtsamples[col][1][row].detach().cpu()
+            img = (torch.clamp(img, -1, 1) + 1) / 2
+            permutedImg = img.permute(1,2,0).numpy()
+            axes[row, col].imshow(permutedImg)
+            axes[row, col].axis('off')
+            if row == 0:
+                axes[row, col].set_title(f"{xtsamples[col][0]}", fontsize=10)
+    
+    fig.text(0.5, 0.04, 't value', ha='center')
+    plt.suptitle(f"{title} Reverse diffusion")
+    plt.tight_layout()
+    plt.show()
+
+def plotForwardDiffusion(dataloader: torch.utils.data.DataLoader,
+                         noiseScheduler: NoiseScheduler,
+                         numSamples: int=1,
+                         step: int=1,
+                         title: str="",
+                         seed: int=42):
+    device = "cpu"
+    batch = next(iter(dataloader))
+    assert numSamples <= len(batch[0]), f"numSamples must be less than batch size of dataloader, numSamples: {numSamples}, batch size: {len(batch)}"
+    
+    torch.manual_seed(seed)
+    timesteps = noiseScheduler.timesteps
+
+    tlist = [t for t in range(step, timesteps+1, step)]
+    if tlist[-1] != timesteps:
+        tlist.append(timesteps)
+
+    labels = batch[1][:numSamples].to(device)
+    x0batch = batch[0][:numSamples].to(device)
+    samples = [x0batch]
+
+    for t in tlist:
+        tbatch = torch.full((numSamples,), t-1, device=device, dtype=torch.int64)
+        noise = torch.randn_like(x0batch)
+
+        alphahatt = noiseScheduler.getNoiseLevel(tbatch).view(numSamples, 1, 1, 1)
+        xtbatch = (torch.sqrt(alphahatt) * x0batch) + (torch.sqrt(1 - alphahatt) * noise)
+        samples.append(xtbatch)
+    
+    fig, axes = plt.subplots(nrows=numSamples,
+                             ncols=len(samples),
+                             figsize=(len(samples), numSamples))
+    tlist = [0] + tlist
+
+    if numSamples == 1:
+        axes = axes[np.newaxis, :]
+
+    for row in range(numSamples):
+        for col in range(len(samples)):
+            img = samples[col][row].detach().cpu()
+            img = (torch.clamp(img, -1, 1) + 1) / 2
+            permutedImg = img.permute(1,2,0).numpy()
+            axes[row, col].imshow(permutedImg)
+            axes[row, col].axis('off')
+            if row == 0:
+                axes[row, col].set_title(f"{tlist[col]}", fontsize=10)
+            if col == 0:
+                axes[row, col].set_title(f"{dataloader.dataset.classes[labels[row]]}", loc='left', fontsize=10)
+        
+    fig.text(0.5, 0.04, 't value', ha='center')
+    plt.suptitle(f"{title} Forward diffusion")
+    plt.tight_layout()
+    plt.show()
