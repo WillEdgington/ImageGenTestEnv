@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
 def plotGANLoss(results):
     genTrainLoss = results["generator_train_loss"]
@@ -155,16 +156,20 @@ def plotVAELossAndBeta(results, title: str=""):
     plt.suptitle(t=title)
     plt.show()
 
-def plotDiffusionLoss(results, title: str=""):
+def plotDiffusionLoss(results, log: bool=False, title: str=""):
     difTrainLoss = results["train_loss"]
     difTestLoss = results["test_loss"]
 
-    epochs = range(len(difTrainLoss))
+    epochs = range(1, len(difTrainLoss) + 1)
+
+    if log:
+        difTrainLoss = np.log(np.array(difTrainLoss))
+        difTestLoss = np.log(np.array(difTestLoss))
 
     plt.figure(figsize=(15,7))
     plt.plot(epochs, difTrainLoss, label="Train")
     plt.plot(epochs, difTestLoss, label="Test")
-    plt.title(title + "Loss")
+    plt.title(title + "Loss" + (" (log)" if log else ""))
     plt.xlabel("Epochs")
     plt.legend()
 

@@ -17,6 +17,8 @@ from train.trainDiffusion import train
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 MANUALSEED = 42
+DATA = "STANFORDCARS" # "CIFAR10" "STANFORDCARS" "CELEBA"
+IMGSIZE = 64
 
 BASECHANNELS = 64
 IMGCHANNELS = 3
@@ -29,18 +31,21 @@ ENCHEADDROP = 0.1
 DECHEADDROP = 0.1
 BOTHEADDROP = 0.1
 TIMESTEPS = 1000
+NSCHEDULE = "Cosine"
+noiseScheduler = CosineNoiseScheduler(timesteps=TIMESTEPS) if NSCHEDULE == "Cosine" else LinearNoiseScheduler(timesteps=TIMESTEPS)
 
-LR = 1e-4
-BATCHSIZE = 64
+BATCHSIZE = 4
 EPOCHS = 300
 SAVEPOINT = 10
+LR = (1e-4 * (BATCHSIZE / 64))
 
-RESULTSNAME = f"DIFFUSION_CIFAR10_RESULTS.pth"
-MODELNAME = f"DIFFUSION_CIFAR10"
+datatag = DATA + str(IMGSIZE) if DATA != "CIFAR10" else ""
+RESULTSNAME = f"DIFFUSION{datatag}{NSCHEDULE}T{TIMESTEPS}BS{BATCHSIZE}D{DEPTH}BC{BASECHANNELS}AH{ENCHEADS}AD{int(ENCHEADDROP*10)}_CIFAR10_RESULTS.pth"
+MODELNAME = f"DIFFUSION{datatag}{NSCHEDULE}T{TIMESTEPS}BS{BATCHSIZE}D{DEPTH}BC{BASECHANNELS}AH{ENCHEADS}AD{int(ENCHEADDROP*10)}_CIFAR10"
 
 if __name__=="__main__":
-    trainDataloader = prepareData(batchSize=BATCHSIZE, seed=MANUALSEED)
-    testDataloader = prepareData(train=False, batchSize=BATCHSIZE)
+    trainDataloader = prepareData(data=DATA, batchSize=BATCHSIZE, numWorkers=0, seed=MANUALSEED, imgSize=IMGSIZE)
+    testDataloader = prepareData(data=DATA, train=False, batchSize=BATCHSIZE, numWorkers=0, imgSize=IMGSIZE)
 
     results = loadResultsMap(resultsName=RESULTSNAME)
     epochscomplete = len(results["train_loss"]) if results is not None else 0
@@ -62,19 +67,18 @@ if __name__=="__main__":
         unet = loadModel(model=unet, modelName=MODELNAME+f"_{epochscomplete}_EPOCHS_MODEL.pth", device=device)
 
     summary(model=unet,
-            input_size=[(1, 3, 32, 32),(1,)],
+            input_size=[(BATCHSIZE, 3, IMGSIZE, IMGSIZE),(1,)],
             col_names=["input_size", "output_size", "num_params", "trainable"],
             col_width=20,
             row_settings=["var_names"])
     
     lossFn = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(params=unet.parameters(), lr=LR)
-    noiseScheduler = CosineNoiseScheduler(timesteps=TIMESTEPS)
 
     plotForwardDiffusion(dataloader=testDataloader,
                          noiseScheduler=noiseScheduler,
-                         numSamples=3,
-                         step=100,
+                         numSamples=4,
+                         step=TIMESTEPS//10,
                          title="",
                          seed=MANUALSEED)
 
@@ -88,7 +92,7 @@ if __name__=="__main__":
                         epochs=SAVEPOINT,
                         results=results,
                         numGeneratedSamples=5,
-                        imgShape=(3,32,32),
+                        imgShape=(3,IMGSIZE,IMGSIZE),
                         sampleEta=1.0,
                         seed=MANUALSEED,
                         device=device)
@@ -98,25 +102,15 @@ if __name__=="__main__":
         saveModelAndResultsMap(model=unet, results=results, modelName=MODELNAME+f"_{epochscomplete}_EPOCHS_MODEL.pth", resultsName=RESULTSNAME)
 
 
-    plotDiffusionLoss(results=results)
-    plotDiffusionSamples(results=results, step=10)
+    plotDiffusionLoss(results=results, log=True)
+    plotDiffusionSamples(results=results, step=EPOCHS//10)
     plotDiffusionTtraversalSamples(model=unet,
                                    noiseScheduler=noiseScheduler,
-                                   numSamples=3,
-                                   imgShape=(3, 32, 32),
-                                   step=100,
-                                   skip=1,
-                                   eta=1.0,
-                                   title="",
-                                   seed=MANUALSEED,
-                                   device=device)
-    plotDiffusionTtraversalSamples(model=unet,
-                                   noiseScheduler=noiseScheduler,
-                                   numSamples=3,
-                                   imgShape=(3, 32, 32),
-                                   step=100,
+                                   numSamples=4,
+                                   imgShape=(3, IMGSIZE, IMGSIZE),
+                                   step=TIMESTEPS//10,
                                    skip=20,
-                                   eta=1.0,
+                                   eta=1,
                                    title="",
                                    seed=MANUALSEED,
                                    device=device)

@@ -267,4 +267,4 @@ def sampleStep(model: torch.nn.Module,
     mu = torch.sqrt(alphahatprev) * x0pred + torch.sqrt(1 - alphahatprev - sigma**2) * eps
     z = torch.randn_like(xt) if (t - skip) > 0 else torch.zeros_like(xt) # dont add noise to x0
 
-    return mu + (sigma * z)
+    return (mu + (sigma * z))

@@ -16,6 +16,8 @@ def trainStep(model: torch.nn.Module,
     trainLoss = 0
     timesteps = noiseScheduler.timesteps
 
+    scaler = torch.amp.GradScaler(device=device, enabled=(device=="cuda"))
+
     for x, _ in dataloader:
         x = x.to(device)
         batchSize = x.size(0)
@@ -31,17 +33,19 @@ def trainStep(model: torch.nn.Module,
         alphahatt = noiseScheduler.getNoiseLevel(t).view(batchSize, 1, 1, 1)
         xt = (torch.sqrt(alphahatt) * x) + (torch.sqrt(1 - alphahatt) * noise)
 
-        # Forward pass xt, t through model
-        predNoise = model(xt, t)
+        optimizer.zero_grad()
 
-        # Loss
-        loss = lossFn(predNoise, noise)
-        trainLoss += loss.item()
+        # Forward pass xt, t through model
+        with torch.amp.autocast(device_type=device, enabled=(device=="cuda")):
+            predNoise = model(xt, t)
+            loss = lossFn(predNoise, noise)
 
         # Backpropagation and gradient descent
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+
+        trainLoss += loss.item()
 
     trainLoss /= len(dataloader)
 
@@ -74,10 +78,9 @@ def testStep(model: torch.nn.Module,
             xt = (torch.sqrt(alphahatt) * x) + (torch.sqrt(1 - alphahatt) * noise)
 
             # Forward pass xt, t through model
-            predNoise = model(xt, t)
-
-            # Loss
-            loss = lossFn(predNoise, noise)
+            with torch.amp.autocast(device_type=device, enabled=(device=="cuda")):
+                predNoise = model(xt, t)
+                loss = lossFn(predNoise, noise)
             testLoss += loss.item()
 
     testLoss /= len(dataloader)
@@ -110,7 +113,7 @@ def train(model: torch.nn.Module,
     torch.manual_seed(seed)
     if numGeneratedSamples > 0:
         assert imgShape is not None, "imgShape for generated samples cannot be None."
-        xTbatch = torch.randn(numGeneratedSamples, imgShape[0], imgShape[1], imgShape[2], device=device)
+        xTbatch = torch.randn(numGeneratedSamples, imgShape[0], imgShape[1], imgShape[2], device="cpu")
 
     for epoch in tqdm(range(epochs)):
         torch.manual_seed(seed+epoch)
@@ -134,11 +137,11 @@ def train(model: torch.nn.Module,
             model.eval()
             x0 = sample(model=model,
                         noiseScheduler=noiseScheduler,
-                        xT=xTbatch,
+                        xT=xTbatch.to(device=device),
                         skip=1,
                         eta=sampleEta,
                         device=device)
-            results["generated_samples"].append(x0)
+            results["generated_samples"].append(x0.to(device="cpu"))
             
 
         print(f"\nEpochs: {epoch+initialEpoch} | (Train) Loss: {trainLoss:.4f} | (Test) Loss: {testLoss:.4f}")

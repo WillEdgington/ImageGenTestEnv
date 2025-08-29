@@ -177,8 +177,12 @@ def plotDiffusionSamples(results: Dict[str, list],
                             ncols=numCols,
                             figsize=(epochs, imgsPerSample))
     
+    if imgsPerSample == 1:
+        axes = axes[np.newaxis, :]
+
     for col, genSample in enumerate(selectedSamples):
         genSample = genSample.detach().cpu()
+        rangeLabel = [genSample.min().item(), genSample.max().item()]
 
         permutedSample = genSample.permute(0, 2, 3, 1)
         for sampleIdx, img in enumerate(permutedSample):
@@ -187,6 +191,9 @@ def plotDiffusionSamples(results: Dict[str, list],
             ax = axs[sampleIdx, col]
             ax.imshow(img.squeeze(), cmap="gray" if img.shape[-1]==1 else None)
             ax.axis("off")
+
+            if sampleIdx == 0:
+                ax.set_title(f"[{rangeLabel[0]:.1f}, {rangeLabel[1]:.1f}]", fontsize=10)
 
     bigAx = fig.add_subplot(111, frameon=False)
     bigAx.set_xticks(np.arange(numCols))
@@ -233,6 +240,10 @@ def plotDiffusionTtraversalSamples(model: torch.nn.Module,
     
     if numSamples == 1:
         axes = axes[np.newaxis, :]
+
+    rangeLabels = []
+    for col in range(len(xtsamples)):
+        rangeLabels.append([xtsamples[col][1].min().item(), xtsamples[col][1].max().item()])
     
     for row in range(numSamples):
         for col in range(len(xtsamples)):
@@ -242,7 +253,7 @@ def plotDiffusionTtraversalSamples(model: torch.nn.Module,
             axes[row, col].imshow(permutedImg)
             axes[row, col].axis('off')
             if row == 0:
-                axes[row, col].set_title(f"{xtsamples[col][0]}", fontsize=10)
+                axes[row, col].set_title(f"t={xtsamples[col][0]} [{rangeLabels[col][0]:.1f}, {rangeLabels[col][1]:.1f}]", fontsize=10)
     
     fig.text(0.5, 0.04, 't value', ha='center')
     plt.suptitle(f"{title} Reverse diffusion")
@@ -269,6 +280,7 @@ def plotForwardDiffusion(dataloader: torch.utils.data.DataLoader,
     labels = batch[1][:numSamples].to(device)
     x0batch = batch[0][:numSamples].to(device)
     samples = [x0batch]
+    rangeLabels = [[x0batch.min().item(), x0batch.max().item()]]
 
     for t in tlist:
         tbatch = torch.full((numSamples,), t-1, device=device, dtype=torch.int64)
@@ -277,6 +289,7 @@ def plotForwardDiffusion(dataloader: torch.utils.data.DataLoader,
         alphahatt = noiseScheduler.getNoiseLevel(tbatch).view(numSamples, 1, 1, 1)
         xtbatch = (torch.sqrt(alphahatt) * x0batch) + (torch.sqrt(1 - alphahatt) * noise)
         samples.append(xtbatch)
+        rangeLabels.append([xtbatch.min().item(), xtbatch.max().item()])
     
     fig, axes = plt.subplots(nrows=numSamples,
                              ncols=len(samples),
@@ -294,7 +307,7 @@ def plotForwardDiffusion(dataloader: torch.utils.data.DataLoader,
             axes[row, col].imshow(permutedImg)
             axes[row, col].axis('off')
             if row == 0:
-                axes[row, col].set_title(f"{tlist[col]}", fontsize=10)
+                axes[row, col].set_title(f"t={tlist[col]} [{rangeLabels[col][0]:.1f}, {rangeLabels[col][1]:.1f}]", fontsize=10)
             if col == 0:
                 axes[row, col].set_title(f"{dataloader.dataset.classes[labels[row]]}", loc='left', fontsize=10)
         
