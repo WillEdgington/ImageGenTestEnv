@@ -256,7 +256,7 @@ def plotDiffusionTtraversalSamples(model: torch.nn.Module,
                 axes[row, col].set_title(f"t={xtsamples[col][0]} [{rangeLabels[col][0]:.1f}, {rangeLabels[col][1]:.1f}]", fontsize=10)
     
     fig.text(0.5, 0.04, 't value', ha='center')
-    plt.suptitle(f"{title} Reverse diffusion")
+    plt.suptitle(f"{title} Reverse diffusion (skip: {skip}, eta: {eta})")
     plt.tight_layout()
     plt.show()
 
@@ -265,6 +265,7 @@ def plotForwardDiffusion(dataloader: torch.utils.data.DataLoader,
                          numSamples: int=1,
                          step: int=1,
                          title: str="",
+                         classLabel: bool=False,
                          seed: int=42):
     device = "cpu"
     batch = next(iter(dataloader))
@@ -308,7 +309,7 @@ def plotForwardDiffusion(dataloader: torch.utils.data.DataLoader,
             axes[row, col].axis('off')
             if row == 0:
                 axes[row, col].set_title(f"t={tlist[col]} [{rangeLabels[col][0]:.1f}, {rangeLabels[col][1]:.1f}]", fontsize=10)
-            if col == 0:
+            if col == 0 and classLabel:
                 axes[row, col].set_title(f"{dataloader.dataset.classes[labels[row]]}", loc='left', fontsize=10)
         
     fig.text(0.5, 0.04, 't value', ha='center')
