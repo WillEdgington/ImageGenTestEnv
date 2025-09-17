@@ -195,3 +195,32 @@ class AdaptiveMomentBetaScheduler(BetaScheduler):
         self.beta = max(self.betaMin, min(self.beta, self.betaMax))
 
         return self.beta
+    
+    def state_dict(self):
+        return {
+            "beta": self.beta,
+            "gamma": self.gamma,
+            "eta": self.eta,
+            "epsilon": self.epsilon,
+            "betaMin": self.betaMin,
+            "betaMax": self.betaMax,
+            "momentumRatio": self.momentumRatio,
+            "Dkl": self.Dkl,
+            "recon": self.recon,
+            "step": self.step,
+            "warmup": self.warmup
+        }
+    
+    def load_state_dict(self, state):
+        self.beta = state["beta"]
+        self.gamma = state["gamma"]
+        self.eta = state["eta"]
+        self.epsilon = state["epsilon"]
+        self.betaMin = state["betaMin"]
+        self.betaMax = state["betaMax"]
+        self.momentumRatio = state["momentumRatio"]
+        self.Dkl = state["Dkl"]
+        self.recon = state["recon"]
+        self.step = state["step"]
+        self.warmup = state["warmup"]
+

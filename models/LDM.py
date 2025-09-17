@@ -17,7 +17,7 @@ class ConvBlock(nn.Module):
 
 class ResidualBlock(nn.Module):
     def __init__(self, inChannels: int, outChannels: int, numConvs: int=2, numGroups: int|None=None):
-        super.__init__()
+        super().__init__()
         assert numConvs >= 1, "Must have atleast one convolutional block in residual block"
 
         layers = nn.ModuleList()
@@ -35,7 +35,7 @@ class ResidualBlock(nn.Module):
     
 class DownsampleBlock(nn.Module):
     def __init__(self, inChannels: int, outChannels: int, bias: bool=False):
-        super.__init__()
+        super().__init__()
         self.conv = nn.Conv2d(in_channels=inChannels, out_channels=outChannels, kernel_size=4, stride=2, padding=1, bias=bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -80,7 +80,7 @@ class Decoder(nn.Module):
         super().__init__()
         channels = baseChannels << numDown
         layers = nn.ModuleList([
-            nn.Conv2d(in_channels=latentChannels, out_channels=channels, padding=1, bias=False)
+            nn.Conv2d(in_channels=latentChannels, out_channels=channels, kernel_size=3, padding=1, bias=False)
             ])
         layers += [ResidualBlock(inChannels=channels, outChannels=channels, numConvs=numResConvs) for _ in range(resBlocks)]
 
