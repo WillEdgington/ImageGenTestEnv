@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from typing import Tuple
 
 class ConvBlock(nn.Module):
     def __init__(self, inChannels: int, outChannels: int, numGroups: int|None=None):
@@ -69,7 +70,7 @@ class Encoder(nn.Module):
         self.convMu = nn.Conv2d(channels, latentChannels, kernel_size=3, padding=1)
         self.convLogvar = nn.Conv2d(channels, latentChannels, kernel_size=3, padding=1)
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         x = self.block(x)
         return self.convMu(x), self.convLogvar(x)
     
@@ -96,8 +97,29 @@ class Decoder(nn.Module):
         return self.dec(z)
 
 class LDMVAE(nn.Module):
-    def __init__():
-        pass
+    def __init__(self, imgChannels: int=3, baseChannels: int=64, latentChannels: int=4, numDown: int=3,
+                 resBlocks: Tuple[int, int] | int=2, numResConvs: Tuple[int, int] | int=2, stochastic: bool=True):
+        if isinstance(resBlocks, int):
+            resBlocks = (resBlocks, resBlocks)
+        if isinstance(numResConvs, int):
+            numResConvs = (numResConvs, numResConvs)
+        
+        super().__init__()
+        self.encoder = Encoder(inChannels=imgChannels, baseChannels=baseChannels, latentChannels=latentChannels, 
+                               numDown=numDown, resBlocks=resBlocks[0], numResConvs=numResConvs[0])
+        self.decoder = Decoder(outChannels=imgChannels, baseChannels=baseChannels, latentChannels=latentChannels, 
+                               numDown=numDown, resBlocks=resBlocks[0], numResConvs=numResConvs[0])
+        self.latentChannels = latentChannels
+        self.stochastic = stochastic
+    
+    def reparameterize(self, mu, logvar) -> torch.Tensor:
+        if not self.stochastic:
+            return mu
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        pass
+        mu, logvar = self.encoder(x)
+        z = self.reparameterize(mu, logvar)
+        return self.decoder(z), mu, logvar

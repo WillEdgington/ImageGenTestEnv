@@ -124,9 +124,14 @@ class VAE(nn.Module):
         z = self.reparameterize(mu, logvar)
         return self.decode(z), mu, logvar
         
-def vaeLoss(xhat, x, mu, logvar, beta=1.0):
-    reconLoss = nn.functional.mse_loss(xhat, x, reduction='sum')
+def vaeLoss(xhat, x, mu, logvar, beta=1.0, reduction: str="mean"):
+    assert reduction in {"mean", "sum"}, "reduction must be 'mean' or 'sum'."
+    reconLoss = nn.functional.mse_loss(xhat, x, reduction=reduction)
     klDiv = torch.sum(logvar.exp() + mu.pow(2) - (1 + logvar)) * 0.5
+
+    if reduction == "mean":
+        klDiv /= x.size(0)
+
     return reconLoss + beta * klDiv, reconLoss, klDiv
 
 class BetaScheduler:
@@ -135,18 +140,18 @@ class BetaScheduler:
     def update(self, Dkl: float, recon: float) -> float:
         raise NotImplementedError("BetaScheduler.update() is not implemented. Please implement method.")
 
-
 # Could add a warmup so Dkl and recon can stabilise first before evaluating their relative gradients (attempt to fix exploding and vanishing beta)?
 # Could add entropy (make it more relevant to the initial objective of beta VAE)?
 # Finetune model (if we look at "Cyclical Annealing Schedule: A Simple Approach to Mitigating KL Vanishing" (Fu et al. 2019) they have an initial beta of 0)?
 class AdaptiveMomentBetaScheduler(BetaScheduler):
     def __init__(self, 
                  betaInit: float=1.0, # initial beta value
-                 gamma: float=0.2, # momentum value 
+                 gamma: float=0.1, # momentum value 
                  eta: float=1.0, # how agressively beta is updated
                  epsilon: float=1e-8, # arbitrarily small value > 0
-                 betaMin: float=0.1, # min for beta 
-                 betaMax: float=10.0 # max for beta
+                 betaMin: float=1e-8, # min for beta 
+                 betaMax: float=10.0, # max for beta
+                 warmup: int=5
                  ):
         assert 0 < gamma <= 1, f"momentum value (gamma) must be in range 0 < gamma <= 1. Current value: gamma = {gamma}"
         assert betaMin < betaMax, f"beta min must be less than beta max. Current values: Bmin = {betaMin}, Bmax = {betaMax}"
@@ -157,14 +162,17 @@ class AdaptiveMomentBetaScheduler(BetaScheduler):
         self.eta = eta
         self.betaMin = betaMin
         self.betaMax = betaMax
+        self.warmup = warmup
         
+        self.step = 0
         self.momentumRatio = 1.0
 
         self.Dkl = None
         self.recon = None
 
     def update(self, Dkl: float, recon: float) -> float:
-        if self.Dkl is None or self.recon is None:
+        self.step += 1
+        if self.step < self.warmup:
             self.Dkl = Dkl
             self.recon = recon
             return self.beta
