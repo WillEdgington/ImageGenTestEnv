@@ -20,9 +20,12 @@ def loadTorchObject(targetDir: str, fileName: str, device="cpu"):
 
     return torch.load(fileLoadPath, map_location=device)
 
-def saveModelAndResultsMap(model: torch.nn.Module, results: dict, modelName: str, resultsName: str, modelDir: str="saved_models", resultsDir: str="saved_results"):
+def saveModelAndResultsMap(model: torch.nn.Module|dict, results: dict, modelName: str, resultsName: str, modelDir: str="saved_models", resultsDir: str="saved_results"):
     # Save model weights
-    saveTorchObject(obj=model.state_dict(),
+    if not isinstance(model, dict):
+        model = model.state_dict()
+
+    saveTorchObject(obj=model,
                     targetDir=modelDir,
                     fileName=modelName)
     
@@ -61,3 +64,12 @@ def loadResultsMap(resultsName: str, resultsDir: str="saved_results", device="cp
         return result
     except:
         return None
+    
+def loadStates(stateName: str, stateDir: str="saved_models", **kwargs):
+    state = loadTorchObject(targetDir=stateDir, fileName=stateName, device="cpu")
+    for k, v in kwargs.items():
+        if k not in state.keys():
+            continue
+        v.load_state_dict(state[k])
+    
+    return state
