@@ -4,13 +4,19 @@ from tqdm.auto import tqdm
 from typing import Dict, List, Tuple
 
 from models.vae import vaeLoss, VAE, BetaScheduler
+from models.LDM import LDMVAE
 
 def activeLatents(mu: torch.Tensor, threshold: float = 5e-2) -> tuple[int, float]:
-    std = mu.std(dim=0)
+    if mu.dim() == 2:
+        std = mu.std(dim=0)
+    elif mu.dim() == 4:
+        std = mu.view(mu.size(0), mu.size(1), -1).mean(dim=2).std(dim=0)
+    else:
+        raise ValueError(f"Unsupported shape for mu: {mu.shape}")
     activeDims = (std > threshold).sum().item()
     return int(activeDims), float(std.mean().item())
 
-def trainStep(model: VAE, 
+def trainStep(model: VAE|LDMVAE, 
               dataloader: torch.utils.data.DataLoader,
               optimizer: torch.optim.Optimizer,
               beta: float=1.0,
@@ -23,15 +29,20 @@ def trainStep(model: VAE,
 
     if countActiveDims:
         activeDims, latentStd = 0, 0
+    
+    scaler = torch.amp.GradScaler(device=device, enabled=(device=="cuda"))
 
     for x, _ in dataloader:
         x = x.to(device)
 
-        # Forward pass through model
-        xhat, mu, logvar = model(x)
+        optimizer.zero_grad(set_to_none=True)
 
-        # Get loss
-        loss, reconLoss, DklLoss = vaeLoss(xhat=xhat, x=x, mu=mu, logvar=logvar, beta=beta)
+        # Forward pass through model and get loss
+        with torch.amp.autocast(device_type=device, enabled=(device=="cuda")):
+            xhat, mu, logvar = model(x)
+            loss, reconLoss, DklLoss = vaeLoss(xhat=xhat, x=x, mu=mu, logvar=logvar, beta=beta)
+        
+        # track loss
         trainLoss += loss.item()
         DklTrainLoss += DklLoss.item()
         reconTrainLoss += reconLoss.item()
@@ -43,9 +54,9 @@ def trainStep(model: VAE,
             activeDims += dims
 
         # Perform backpropagation and gradient descent
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
     trainLoss /= len(dataloader)
     DklTrainLoss /= len(dataloader)
@@ -58,7 +69,7 @@ def trainStep(model: VAE,
     
     return trainLoss, DklTrainLoss, reconTrainLoss, None, None
 
-def testStep(model: VAE,
+def testStep(model: VAE|LDMVAE,
              dataloader: torch.utils.data.DataLoader,
              beta: float=1.0,
              countActiveDims: bool=False,
@@ -73,13 +84,14 @@ def testStep(model: VAE,
 
     with torch.inference_mode():
         for x, _ in dataloader:
-            x.to(device)
+            x = x.to(device)
 
-            # Forward pass through model
-            xhat, mu, logvar = model(x)
+            # Forward pass through model and get loss
+            with torch.amp.autocast(device_type=device, enabled=(device=="cuda")):
+                xhat, mu, logvar = model(x)
+                loss, reconLoss, DklLoss = vaeLoss(xhat=xhat, x=x, mu=mu, logvar=logvar, beta=beta)
 
-            # Get loss
-            loss, reconLoss, DklLoss = vaeLoss(xhat=xhat, x=x, mu=mu, logvar=logvar, beta=beta)
+            # track loss
             testLoss += loss.item()
             DklTestLoss += DklLoss.item()
             reconTestLoss += reconLoss.item()
@@ -101,7 +113,7 @@ def testStep(model: VAE,
 
     return testLoss, DklTestLoss, reconTestLoss, None, None
 
-def train(model: VAE,
+def train(model: VAE|LDMVAE,
           trainDataloader: torch.utils.data.DataLoader,
           testDataloader: torch.utils.data.DataLoader,
           optimizer: torch.optim.Optimizer,
@@ -115,6 +127,10 @@ def train(model: VAE,
           results: Dict[str, list] | None=None) -> Dict[str, list]:
     assert decSamplesPerEpoch <= 10, f"genSamplesPerEpoch must be less than or equal to 10, currently it is {decSamplesPerEpoch}"
     model.to(device)
+
+    initialEpoch = 1
+    if results is not None:
+        initialEpoch += len(results["train_loss"])
 
     if not results:
         results = {"train_loss": [],
@@ -132,7 +148,8 @@ def train(model: VAE,
     
     # Create sample noise that will be used to generate images per epoch
     if decSamplesPerEpoch:
-        latentVectors = torch.randn(decSamplesPerEpoch, latentDim).to(device)
+        latentShape = latentDim if not model.latentChannels else (model.latentChannels, latentDim, latentDim)
+        latentVectors = torch.randn(decSamplesPerEpoch, *latentShape).to(device)
     
     for epoch in tqdm(range(epochs)):
         # Run a training step
@@ -174,7 +191,7 @@ def train(model: VAE,
         results["decoder_samples"].append(decSample)
         
         # Print epoch and loss values
-        print(f"\nEpoch: {epoch+1} | (Train) Total loss: {trainLoss:.4f}, Dkl loss: {DklTrainLoss:.4f}, Reconstruction loss: {reconTrainLoss:.4f} | "
+        print(f"\nEpoch: {initialEpoch+epoch} | (Train) Total loss: {trainLoss:.4f}, Dkl loss: {DklTrainLoss:.4f}, Reconstruction loss: {reconTrainLoss:.4f} | "
               f"(Test) Total loss: {testLoss:.4f}, Dkl loss: {DklTestLoss:.4f}, Reconstruction loss: {reconTestLoss:.4f}")
         if countActiveDims:
             print(f"(Active latent dimensions) Train: {activeDimsTrain:.1f}, Test: {activeDimsTest:.1f} | (Mean std of latent dimensions) Train: {latentStdTrain:.4f}, Test: {latentStdTest:.4f}")

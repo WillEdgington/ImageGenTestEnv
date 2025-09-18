@@ -33,7 +33,7 @@ def trainStep(model: torch.nn.Module,
         alphahatt = noiseScheduler.getNoiseLevel(t).view(batchSize, 1, 1, 1)
         xt = (torch.sqrt(alphahatt) * x) + (torch.sqrt(1 - alphahatt) * noise)
 
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
 
         # Forward pass xt, t through model
         with torch.amp.autocast(device_type=device, enabled=(device=="cuda")):

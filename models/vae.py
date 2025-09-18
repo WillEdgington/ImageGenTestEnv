@@ -78,6 +78,7 @@ class VAE(nn.Module):
                  downExtraconvAct: nn.ReLU | nn.LeakyReLU | nn.SiLU | nn.GELU=nn.LeakyReLU(0.2, inplace=True)):
         super().__init__()
         self.latentDim = latentDim
+        self.latentChannels = None
         self.imgChannels = imgChannels
 
         self.encoder = nn.Sequential(

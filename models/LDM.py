@@ -84,12 +84,12 @@ class Decoder(nn.Module):
             ])
         layers += [ResidualBlock(inChannels=channels, outChannels=channels, numConvs=numResConvs) for _ in range(resBlocks)]
 
-        for i in range(numDown - 2, -1, -1):
+        for i in range(numDown - 1, -1, -1):
             layers.append(UpsampleBlock(inChannels=channels, outChannels=baseChannels<<i))
             channels = baseChannels << i
             layers += [ResidualBlock(inChannels=channels, outChannels=channels, numConvs=numResConvs) for _ in range(resBlocks)]
 
-        layers += [nn.Conv2d(in_channels=channels, out_channels=outChannels, kernel_size=3, padding=1),
+        layers += [nn.Conv2d(in_channels=channels, out_channels=outChannels, kernel_size=3, padding=1, bias=False),
                    nn.Tanh()]
         self.dec = nn.Sequential(*layers)
     
@@ -118,6 +118,9 @@ class LDMVAE(nn.Module):
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
+    
+    def decode(self, z: torch.Tensor) -> torch.Tensor:
+        return self.decoder(z)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         mu, logvar = self.encoder(x)

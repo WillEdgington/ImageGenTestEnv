@@ -9,9 +9,12 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from utils.data import prepareData
-from utils.save import saveModelAndResultsMap, loadResultsMap, loadModel
+from utils.save import saveModelAndResultsMap, loadResultsMap, loadModel, loadStates
 from models.LDM import LDMVAE
-from models.vae import vaeLoss, AdaptiveMomentBetaScheduler
+from models.vae import AdaptiveMomentBetaScheduler
+from train.trainVae import train
+from utils.visualize import plotVAEDecoderSamples
+from utils.losses import plotVAELossAndBeta
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 MANUALSEED = 42
@@ -27,14 +30,23 @@ NUMRESCONVS = (2, 2)
 ISSTOCHASTIC = True
 
 BATCHSIZE = 64
-EPOCHS = 100
+EPOCHS = 200
 SAVEPOINT = 10
 LR = (1e-4 * (BATCHSIZE / 64))
+
+datatag = DATA + str(IMGSIZE) if DATA != "CIFAR10" else DATA
+stochtag = "STOCH" if ISSTOCHASTIC else ""
+infostr = f"LDMVAE{datatag}BC{BASECHANNELS}LC{LATENTCHANNELS}ND{NUMDOWN}RBE{RESBLOCKS[0]}RBD{RESBLOCKS[1]}NRCE{NUMRESCONVS[0]}NRCE{NUMRESCONVS[1]}BS{BATCHSIZE}{stochtag}"
+RESULTSNAME = f"{infostr}_RESULTS.pth"
+MODELNAME = f"{infostr}"
 
 if __name__=="__main__":
     trainDataloader = prepareData(data=DATA, batchSize=BATCHSIZE, numWorkers=0, seed=MANUALSEED, imgSize=IMGSIZE)
     testDataloader = prepareData(data=DATA, train=False, batchSize=BATCHSIZE, numWorkers=0, imgSize=IMGSIZE)
 
+    results = loadResultsMap(resultsName=RESULTSNAME)
+    epochscomplete = len(results["train_loss"]) if results is not None else 0
+    
     torch.manual_seed(MANUALSEED)
     ldmvae = LDMVAE(imgChannels=IMGCHANNELS,
                     baseChannels=BASECHANNELS,
@@ -42,14 +54,8 @@ if __name__=="__main__":
                     numDown=NUMDOWN,
                     resBlocks=RESBLOCKS,
                     numResConvs=NUMRESCONVS,
-                    stochastic=ISSTOCHASTIC)
-    ldmvae.to(device)
+                    stochastic=ISSTOCHASTIC).to(device)
     
-    summary(model=ldmvae,
-            input_size=[(BATCHSIZE, IMGCHANNELS, IMGSIZE, IMGSIZE)],
-            col_names=["input_size", "output_size", "num_params", "trainable"],
-            col_width=20,
-            row_settings=["var_names"])
     betaScheduler = AdaptiveMomentBetaScheduler(betaInit=1e-8,
                                                 gamma=0.1,
                                                 eta=1,
@@ -57,4 +63,39 @@ if __name__=="__main__":
                                                 betaMax=1,
                                                 warmup=5)
     optimizer = torch.optim.Adam(ldmvae.parameters(), lr=LR)
-    results = None
+
+    states = {}
+    if epochscomplete > 0:
+        states = loadStates(stateName=MODELNAME+f"_{epochscomplete}_EPOCHS_MODEL.pth", 
+                            model=ldmvae, optimizer=optimizer, betaScheduler=betaScheduler)
+    ldmvae.to(device)
+    
+    summary(model=ldmvae,
+            input_size=[(BATCHSIZE, IMGCHANNELS, IMGSIZE, IMGSIZE)],
+            col_names=["input_size", "output_size", "num_params", "trainable"],
+            col_width=20,
+            row_settings=["var_names"])
+    
+    while epochscomplete < EPOCHS:
+        results = train(model=ldmvae,
+                        trainDataloader=trainDataloader,
+                        testDataloader=testDataloader,
+                        optimizer=optimizer,
+                        epochs=SAVEPOINT,
+                        beta=betaScheduler.beta,
+                        device=device,
+                        latentDim=IMGSIZE >> NUMDOWN,
+                        decSamplesPerEpoch=5,
+                        countActiveDims=True,
+                        betaScheduler=betaScheduler,
+                        results=results)
+        
+        states["model"] = ldmvae.state_dict()
+        states["optimizer"] = optimizer.state_dict()
+        states["betaScheduler"] = betaScheduler.state_dict()
+        epochscomplete += SAVEPOINT
+
+        saveModelAndResultsMap(model=states, results=results, modelName=MODELNAME+f"_{epochscomplete}_EPOCHS_MODEL.pth",
+                               resultsName=RESULTSNAME)
+    plotVAEDecoderSamples(results=results, step=EPOCHS//10)
+    plotVAELossAndBeta(results=results)
