@@ -121,6 +121,9 @@ class LDMVAE(nn.Module):
     
     def decode(self, z: torch.Tensor) -> torch.Tensor:
         return self.decoder(z)
+    
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        return self.encoder(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         mu, logvar = self.encoder(x)

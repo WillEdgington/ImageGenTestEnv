@@ -21,6 +21,7 @@ def trainStep(model: VAE|LDMVAE,
               optimizer: torch.optim.Optimizer,
               beta: float=1.0,
               countActiveDims: bool=False,
+              enableAmp: bool=False,
               device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> Tuple[float, float, float, float | None, float | None]:
     model.train()
     
@@ -30,7 +31,7 @@ def trainStep(model: VAE|LDMVAE,
     if countActiveDims:
         activeDims, latentStd = 0, 0
     
-    scaler = torch.amp.GradScaler(device=device, enabled=(device=="cuda"))
+    scaler = torch.amp.GradScaler(device=device, enabled=(device=="cuda" and enableAmp))
 
     for x, _ in dataloader:
         x = x.to(device)
@@ -38,7 +39,7 @@ def trainStep(model: VAE|LDMVAE,
         optimizer.zero_grad(set_to_none=True)
 
         # Forward pass through model and get loss
-        with torch.amp.autocast(device_type=device, enabled=(device=="cuda")):
+        with torch.amp.autocast(device_type=device, enabled=(device=="cuda" and enableAmp)):
             xhat, mu, logvar = model(x)
             loss, reconLoss, DklLoss = vaeLoss(xhat=xhat, x=x, mu=mu, logvar=logvar, beta=beta)
         
@@ -55,6 +56,8 @@ def trainStep(model: VAE|LDMVAE,
 
         # Perform backpropagation and gradient descent
         scaler.scale(loss).backward()
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
         scaler.step(optimizer)
         scaler.update()
 
@@ -73,6 +76,7 @@ def testStep(model: VAE|LDMVAE,
              dataloader: torch.utils.data.DataLoader,
              beta: float=1.0,
              countActiveDims: bool=False,
+             enableAmp: bool=False,
              device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> Tuple[float, float, float, float | None, float | None]:
     model.eval()
 
@@ -87,7 +91,7 @@ def testStep(model: VAE|LDMVAE,
             x = x.to(device)
 
             # Forward pass through model and get loss
-            with torch.amp.autocast(device_type=device, enabled=(device=="cuda")):
+            with torch.amp.autocast(device_type=device, enabled=(device=="cuda" and enableAmp)):
                 xhat, mu, logvar = model(x)
                 loss, reconLoss, DklLoss = vaeLoss(xhat=xhat, x=x, mu=mu, logvar=logvar, beta=beta)
 
@@ -119,6 +123,7 @@ def train(model: VAE|LDMVAE,
           optimizer: torch.optim.Optimizer,
           epochs: int,
           beta: float=1.0,
+          enableAmp: bool=False,
           device: torch.device="cuda" if torch.cuda.is_available() else "cpu",
           latentDim: int=100,
           decSamplesPerEpoch: int=0,
@@ -158,6 +163,7 @@ def train(model: VAE|LDMVAE,
                                                                                              optimizer=optimizer,
                                                                                              beta=beta,
                                                                                              countActiveDims=countActiveDims,
+                                                                                             enableAmp=enableAmp,
                                                                                              device=device)
         results["train_loss"].append(trainLoss)
         results["Dkl_train_loss"].append(DklTrainLoss)
@@ -168,6 +174,7 @@ def train(model: VAE|LDMVAE,
                                                                                        dataloader=testDataloader,
                                                                                        beta=beta,
                                                                                        countActiveDims=countActiveDims,
+                                                                                       enableAmp=enableAmp,
                                                                                        device=device)
         results["test_loss"].append(testLoss)
         results["Dkl_test_loss"].append(DklTestLoss)

@@ -13,8 +13,8 @@ from utils.save import saveModelAndResultsMap, loadResultsMap, loadModel, loadSt
 from models.LDM import LDMVAE
 from models.vae import AdaptiveMomentBetaScheduler
 from train.trainVae import train
-from utils.visualize import plotVAEDecoderSamples
-from utils.losses import plotVAELossAndBeta
+from utils.visualize import plotVAEDecoderSamples, visualiseVAELatentTraversal
+from utils.losses import plotVAELossAndBeta, plotVAELossGradients
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 MANUALSEED = 42
@@ -24,15 +24,16 @@ IMGCHANNELS = 3
 
 BASECHANNELS = 64
 LATENTCHANNELS = 4
-NUMDOWN = 3
+NUMDOWN = 2
 RESBLOCKS = (2, 2)
 NUMRESCONVS = (2, 2)
 ISSTOCHASTIC = True
 
 BATCHSIZE = 64
-EPOCHS = 200
+EPOCHS = 80
 SAVEPOINT = 10
 LR = (1e-4 * (BATCHSIZE / 64))
+WEIGHTDECAY = 1e-4
 
 datatag = DATA + str(IMGSIZE) if DATA != "CIFAR10" else DATA
 stochtag = "STOCH" if ISSTOCHASTIC else ""
@@ -56,13 +57,13 @@ if __name__=="__main__":
                     numResConvs=NUMRESCONVS,
                     stochastic=ISSTOCHASTIC).to(device)
     
-    betaScheduler = AdaptiveMomentBetaScheduler(betaInit=1e-8,
+    betaScheduler = AdaptiveMomentBetaScheduler(betaInit=1e-6,
                                                 gamma=0.1,
                                                 eta=1,
                                                 betaMin=1e-8,
                                                 betaMax=1,
                                                 warmup=5)
-    optimizer = torch.optim.Adam(ldmvae.parameters(), lr=LR)
+    optimizer = torch.optim.AdamW(ldmvae.parameters(), lr=LR, weight_decay=WEIGHTDECAY)
 
     states = {}
     if epochscomplete > 0:
@@ -83,6 +84,7 @@ if __name__=="__main__":
                         optimizer=optimizer,
                         epochs=SAVEPOINT,
                         beta=betaScheduler.beta,
+                        enableAmp=True,
                         device=device,
                         latentDim=IMGSIZE >> NUMDOWN,
                         decSamplesPerEpoch=5,
@@ -99,3 +101,9 @@ if __name__=="__main__":
                                resultsName=RESULTSNAME)
     plotVAEDecoderSamples(results=results, step=EPOCHS//10)
     plotVAELossAndBeta(results=results)
+    plotVAELossGradients(results=results, alpha=0.3)
+    visualiseVAELatentTraversal(vae=ldmvae,
+                                testDataloader=testDataloader,
+                                numSamples=5,
+                                latentIdx=(0,0,0),
+                                steps=11)

@@ -6,6 +6,7 @@ from typing import Dict, Tuple
 
 from models.vae import VAE
 from models.diffusion import NoiseScheduler, sample
+from models.LDM import LDMVAE
 
 def plotGANGeneratorSamples(results: Dict[str, list], step: int=1):
     genSamples = results["generator_samples"]
@@ -98,10 +99,10 @@ def plotVAEDecoderSamples(results: Dict[str, list], step: int=1, title: str=""):
     plt.tight_layout(rect=(0, 0, 1, 0.95))
     plt.show()
 
-def visualiseVAELatentTraversal(vae: VAE, 
+def visualiseVAELatentTraversal(vae: VAE|LDMVAE, 
                              testDataloader: torch.utils.data.DataLoader, 
                              numSamples: int=5, 
-                             latentIdx: int=0, 
+                             latentIdx: int|Tuple[int,int,int]=0, 
                              steps: int=10, 
                              title: str="",
                              minZ: int=-3,

@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+from typing import List
+
 def plotGANLoss(results):
     genTrainLoss = results["generator_train_loss"]
     genTestLoss = results["generator_test_loss"]
@@ -81,6 +83,75 @@ def plotVAELoss(results, title: str=""):
     plt.xlabel("Epochs")
     plt.legend()
 
+    plt.show()
+
+def smoothGrads(grads: List[float], alpha: float=0.3) -> List[float]:
+    ema = [grads[0]]
+    for g in grads[1:]:
+        ema.append(alpha * g + (1 - alpha) * ema[-1])
+    return ema
+
+def relativeLossGradients(losses: List[float], epsilon: float=1e-8) -> List[float]:
+    return [0] + [(losses[i+1] - losses[i]) / (losses[i] + epsilon) for i in range(len(losses) - 1)]
+
+def plotVAELossGradients(results, title: str="", epsilon: float=1e-8, alpha: float=0.3, displayBeta: bool=True):
+    DklTrainLoss = results["Dkl_train_loss"]
+    DklTestLoss = results["Dkl_test_loss"]
+
+    reconTrainLoss = results["recon_train_loss"]
+    reconTestLoss = results["recon_test_loss"]
+
+    epochs = range(len(DklTrainLoss))
+
+    if displayBeta:
+        betas = results["beta_value"]
+
+    DklTrainGrad = relativeLossGradients(losses=DklTrainLoss, epsilon=epsilon)
+    DklTestGrad = relativeLossGradients(losses=DklTestLoss, epsilon=epsilon)
+
+    reconTrainGrad = relativeLossGradients(losses=reconTrainLoss, epsilon=epsilon)
+    reconTestGrad = relativeLossGradients(losses=reconTestLoss, epsilon=epsilon)
+
+    sumDklReconTrainGrad = [r + d for r, d in zip(reconTrainGrad, DklTrainGrad)]
+    sumDklReconTestGrad = [r + d for r, d in zip(reconTestGrad, DklTestGrad)]
+
+    DklTrainGrad = smoothGrads(grads=DklTrainGrad, alpha=alpha)
+    DklTestGrad = smoothGrads(grads=DklTestGrad, alpha=alpha)
+    reconTrainGrad = smoothGrads(grads=reconTrainGrad, alpha=alpha)
+    reconTestGrad = smoothGrads(grads=reconTestGrad, alpha=alpha)
+    sumDklReconTrainGrad = smoothGrads(grads=sumDklReconTrainGrad, alpha=alpha)
+    sumDklReconTestGrad = smoothGrads(grads=sumDklReconTestGrad, alpha=alpha)
+
+    plt.figure(figsize=(15,7))
+
+    plt.subplot(1+int(displayBeta), 3-int(displayBeta), 1)
+    plt.plot(epochs, DklTrainGrad, label="Train")
+    plt.plot(epochs, DklTestGrad, label="Test")
+    plt.title("Dkl loss gradient (scaled, EMA)")
+    plt.xlabel("Epochs")
+    plt.legend()
+
+    plt.subplot(1+int(displayBeta), 3-int(displayBeta), 2)
+    plt.plot(epochs, reconTrainGrad, label="Train")
+    plt.plot(epochs, reconTestGrad, label="Test")
+    plt.title("Reconstruction loss gradient (scaled, EMA)")
+    plt.xlabel("Epochs")
+    plt.legend()
+
+    plt.subplot(1+int(displayBeta), 3-int(displayBeta), 3)
+    plt.plot(epochs, sumDklReconTrainGrad, label="Train")
+    plt.plot(epochs, sumDklReconTestGrad, label="Test")
+    plt.title("Dkl + Recon gradients (scaled, EMA)")
+    plt.xlabel("Epochs")
+    plt.legend()
+
+    if displayBeta:
+        plt.subplot(1+int(displayBeta), 3-int(displayBeta), 4)
+        plt.plot(epochs, betas)
+        plt.title("Beta Value")
+        plt.xlabel("Epochs")
+    
+    plt.suptitle(t=title)
     plt.show()
 
 def plotVAELossAndBeta(results, title: str=""):

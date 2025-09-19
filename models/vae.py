@@ -128,7 +128,8 @@ class VAE(nn.Module):
 def vaeLoss(xhat, x, mu, logvar, beta=1.0, reduction: str="mean"):
     assert reduction in {"mean", "sum"}, "reduction must be 'mean' or 'sum'."
     reconLoss = nn.functional.mse_loss(xhat, x, reduction=reduction)
-    klDiv = torch.sum(logvar.exp() + mu.pow(2) - (1 + logvar)) * 0.5
+    mu, logvar = mu.float(), logvar.float() 
+    klDiv = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
     if reduction == "mean":
         klDiv /= x.size(0)
