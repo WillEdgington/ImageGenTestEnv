@@ -3,6 +3,7 @@ import torch
 from tqdm.auto import tqdm
 from typing import Dict, List, Tuple
 
+from models.LDM import LDMVAE
 from models.diffusion import NoiseScheduler, sample
 
 def trainStep(model: torch.nn.Module,
@@ -10,18 +11,23 @@ def trainStep(model: torch.nn.Module,
               optimizer: torch.optim.Optimizer,
               lossFn: torch.nn.Module,
               noiseScheduler: NoiseScheduler,
-              device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> float:
+              autoencoder: LDMVAE|None=None,
+              device: torch.device="cuda" if torch.cuda.is_available() else "cpu",
+              enableAmp: bool=True,
+              gradClipping: None|float=None) -> float:
     model.train()
 
     trainLoss = 0
     timesteps = noiseScheduler.timesteps
 
-    scaler = torch.amp.GradScaler(device=device, enabled=(device=="cuda"))
+    scaler = torch.amp.GradScaler(device=device, enabled=(device=="cuda" and enableAmp))
 
     for x, _ in dataloader:
         x = x.to(device)
         batchSize = x.size(0)
 
+        if autoencoder is not None:
+            x = autoencoder.encode(x)[0].detach()
 
         # sample random batch of t in [0,T]
         t = torch.randint(0, timesteps, (batchSize,), device=device, dtype=torch.int64)
@@ -36,12 +42,15 @@ def trainStep(model: torch.nn.Module,
         optimizer.zero_grad(set_to_none=True)
 
         # Forward pass xt, t through model
-        with torch.amp.autocast(device_type=device, enabled=(device=="cuda")):
+        with torch.amp.autocast(device_type=device, enabled=(device=="cuda" and enableAmp)):
             predNoise = model(xt, t)
             loss = lossFn(predNoise, noise)
 
         # Backpropagation and gradient descent
         scaler.scale(loss).backward()
+        if gradClipping is not None:
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=gradClipping)
         scaler.step(optimizer)
         scaler.update()
 
@@ -55,7 +64,9 @@ def testStep(model: torch.nn.Module,
              dataloader: torch.utils.data.DataLoader,
              lossFn: torch.nn.Module,
              noiseScheduler: NoiseScheduler,
-             device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> float:
+             autoencoder: LDMVAE|None,
+             device: torch.device="cuda" if torch.cuda.is_available() else "cpu",
+             enableAmp: bool=True) -> float:
     model.eval()
 
     testLoss = 0
@@ -66,6 +77,8 @@ def testStep(model: torch.nn.Module,
             x = x.to(device)
             batchSize = x.size(0)
 
+            if autoencoder is not None:
+                x = autoencoder.encode(x)[0].detach()
 
             # sample random batch of t in [0,T]
             t = torch.randint(0, timesteps, (batchSize,), device=device, dtype=torch.int64)
@@ -78,7 +91,7 @@ def testStep(model: torch.nn.Module,
             xt = (torch.sqrt(alphahatt) * x) + (torch.sqrt(1 - alphahatt) * noise)
 
             # Forward pass xt, t through model
-            with torch.amp.autocast(device_type=device, enabled=(device=="cuda")):
+            with torch.amp.autocast(device_type=device, enabled=(device=="cuda" and enableAmp)):
                 predNoise = model(xt, t)
                 loss = lossFn(predNoise, noise)
             testLoss += loss.item()
@@ -94,13 +107,19 @@ def train(model: torch.nn.Module,
           lossFn: torch.nn.Module,
           noiseScheduler: NoiseScheduler,
           epochs: int=5,
+          autoencoder: LDMVAE|None=None,
           results: Dict[str, list] | None=None,
           numGeneratedSamples: int=0,
           imgShape: Tuple[int, int, int] | None=None, # (C,H,W)
           sampleEta: float=1.0,
           seed: int=42,
-          device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> Dict[str, list]:
+          device: torch.device="cuda" if torch.cuda.is_available() else "cpu",
+          enableAmp: bool=True,
+          gradClipping: None|float=None) -> Dict[str, list]:
     model.to(device)
+    if autoencoder is not None:
+        autoencoder.to(device)
+        autoencoder.eval()
     
     initialEpoch = 1
     if results is not None:
@@ -122,14 +141,19 @@ def train(model: torch.nn.Module,
                               optimizer=optimizer,
                               lossFn=lossFn,
                               noiseScheduler=noiseScheduler,
-                              device=device)
+                              autoencoder=autoencoder,
+                              device=device,
+                              enableAmp=enableAmp,
+                              gradClipping=gradClipping)
         results["train_loss"].append(trainLoss)
 
         testLoss = testStep(model=model,
                             dataloader=testDataloader,
                             lossFn=lossFn,
                             noiseScheduler=noiseScheduler,
-                            device=device)
+                            autoencoder=autoencoder,
+                            device=device,
+                            enableAmp=enableAmp)
         results["test_loss"].append(testLoss)
 
         if numGeneratedSamples > 0:
@@ -141,6 +165,8 @@ def train(model: torch.nn.Module,
                         skip=1,
                         eta=sampleEta,
                         device=device)
+            if autoencoder is not None:
+                x0 = autoencoder.decode(x0).detach()
             results["generated_samples"].append(x0.to(device="cpu"))
             
 

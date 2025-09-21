@@ -4,6 +4,8 @@ import math
 from torch import nn
 from typing import List, Tuple
 
+from models.LDM import LDMVAE
+
 # aka: Beta Scheduler
 class NoiseScheduler:
     def __init__(self, timesteps):
@@ -213,6 +215,7 @@ class UNet(nn.Module):
 def sample(model: torch.nn.Module,
            noiseScheduler: NoiseScheduler,
            xT: torch.Tensor,
+           autoencoder: LDMVAE|None=None,
            skip: int=1,
            eta: float=1.0,
            getSteps: int | None=None,
@@ -229,7 +232,7 @@ def sample(model: torch.nn.Module,
 
     while t > 0:
         if getSteps is not None and (timesteps - t) % getSteps == 0:
-            samples.append((t, xt))
+            samples.append((t, xt if autoencoder is None else autoencoder.decode(xt).detach()))
         t -= skip
         xt = sampleStep(model=model,
                         noiseScheduler=noiseScheduler,
@@ -240,9 +243,9 @@ def sample(model: torch.nn.Module,
                         device=device)
     
     if getSteps is not None:
-        samples.append((0, xt))
+        samples.append((0, xt if autoencoder is None else autoencoder.decode(xt).detach()))
 
-    return xt if getSteps is None else samples
+    return (xt if autoencoder is None else autoencoder.decode(xt).detach()) if getSteps is None else samples
 
 def sampleStep(model: torch.nn.Module,
                noiseScheduler: NoiseScheduler,

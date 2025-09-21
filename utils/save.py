@@ -66,7 +66,11 @@ def loadResultsMap(resultsName: str, resultsDir: str="saved_results", device="cp
         return None
     
 def loadStates(stateName: str, stateDir: str="saved_models", **kwargs):
-    state = loadTorchObject(targetDir=stateDir, fileName=stateName, device="cpu")
+    try:
+        state = loadTorchObject(targetDir=stateDir, fileName=stateName, device="cpu")
+    except:
+        return None
+    
     for k, v in kwargs.items():
         if k not in state.keys():
             continue

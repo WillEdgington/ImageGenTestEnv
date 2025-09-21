@@ -22,6 +22,7 @@ def trainStep(model: VAE|LDMVAE,
               beta: float=1.0,
               countActiveDims: bool=False,
               enableAmp: bool=False,
+              gradClipping: None|float=None,
               device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> Tuple[float, float, float, float | None, float | None]:
     model.train()
     
@@ -56,8 +57,9 @@ def trainStep(model: VAE|LDMVAE,
 
         # Perform backpropagation and gradient descent
         scaler.scale(loss).backward()
-        scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
+        if gradClipping is not None:
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=gradClipping)
         scaler.step(optimizer)
         scaler.update()
 
