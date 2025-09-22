@@ -23,13 +23,21 @@ DATA = "STANFORDCARS" # "CIFAR10" "STANFORDCARS" "CELEBA"
 IMGSIZE = 64
 IMGCHANNELS = 3
 
-BATCHSIZE = 128
-EPOCHS = 100
+BATCHSIZE = 256
+EPOCHS = 200
 SAVEPOINT = 10
 LR = (1e-4 * (BATCHSIZE / 64))
 WEIGHTDECAY = (1e-4 * (BATCHSIZE / 64))
 
 datatag = DATA + str(IMGSIZE) if DATA != "CIFAR10" else DATA
+
+trainParams = {"seed": MANUALSEED,
+               "data": DATA,
+               "image_size": IMGSIZE,
+               "image_channels": IMGCHANNELS,
+               "batch_size": BATCHSIZE,
+               "learning_rate": LR,
+               "weight_decay": WEIGHTDECAY}
 
 # Autoencoder params
 VAEBATCHSIZE = 64
@@ -42,6 +50,7 @@ VAEISSTOCHASTIC = True
 VAEEPOCHS = 100
 stochtag = "STOCH" if VAEISSTOCHASTIC else ""
 VAENAME = f"LDMVAE{datatag}BC{VAEBASECHANNELS}LC{VAELATENTCHANNELS}ND{VAENUMDOWN}RBE{VAERESBLOCKS[0]}RBD{VAERESBLOCKS[1]}NRCE{VAENUMRESCONVS[0]}NRCE{VAENUMRESCONVS[1]}BS{VAEBATCHSIZE}{stochtag}_{VAEEPOCHS}_EPOCHS_MODEL.pth"
+
 ldmVAEParams = {"baseChannels": VAEBASECHANNELS,
                 "vaeBatchSize": VAEBATCHSIZE,
                 "latentChannels": VAELATENTCHANNELS,
@@ -56,9 +65,10 @@ ldmVAEParams = {"baseChannels": VAEBASECHANNELS,
 DIFBASECHANNELS = 128
 DIFTIMEEMBDIM = None
 DIFDEPTH = 3
-DIFENCHEADS = 2
-DIFDECHEADS = 2
-DIFBOTHEADS = 4
+DIFRESBLOCKS = (2, 4, 2)
+DIFENCHEADS = 8
+DIFDECHEADS = 8
+DIFBOTHEADS = 16
 DIFENCHEADDROP = 0.1
 DIFDECHEADDROP = 0.1
 DIFBOTHEADDROP = 0.1
@@ -66,7 +76,7 @@ TIMESTEPS = 1000
 NSCHEDULE = "Cosine"
 noiseScheduler = CosineNoiseScheduler(timesteps=TIMESTEPS) if NSCHEDULE == "Cosine" else LinearNoiseScheduler(timesteps=TIMESTEPS)
 
-difinfotag = f"DIFFUSION{datatag}{NSCHEDULE}T{TIMESTEPS}BS{BATCHSIZE}D{DIFDEPTH}BC{DIFBASECHANNELS}EAH{DIFENCHEADS}EAD{int(DIFENCHEADDROP*10)}BAH{DIFBOTHEADS}BAD{int(DIFBOTHEADDROP*10)}DAH{DIFDECHEADS}EAD{int(DIFDECHEADDROP*10)}"
+difinfotag = f"LDMDIFFUSION{datatag}{NSCHEDULE}T{TIMESTEPS}BS{BATCHSIZE}D{DIFDEPTH}BC{DIFBASECHANNELS}ERB{DIFRESBLOCKS[0]}EAH{DIFENCHEADS}EAD{int(DIFENCHEADDROP*10)}BRB{DIFRESBLOCKS[1]}BAH{DIFBOTHEADS}BAD{int(DIFBOTHEADDROP*10)}DRB{DIFRESBLOCKS[2]}DAH{DIFDECHEADS}EAD{int(DIFDECHEADDROP*10)}"
 DIFRESULTSNAME = f"{difinfotag}_RESULTS.pth"
 DIFMODELNAME = f"{difinfotag}"
 
@@ -100,6 +110,7 @@ if __name__=="__main__":
                 imgOutChannnels=VAELATENTCHANNELS,
                 timeEmbDim=DIFTIMEEMBDIM,
                 depth=DIFDEPTH,
+                resBlocks=DIFRESBLOCKS,
                 baseChannels=DIFBASECHANNELS,
                 numEncHeads=DIFENCHEADS,
                 numDecHeads=DIFDECHEADS,
@@ -110,15 +121,16 @@ if __name__=="__main__":
     unet.to(device)
     optimizer = torch.optim.AdamW(unet.parameters(), lr=LR, weight_decay=WEIGHTDECAY)
     gradClipping = 1.0
+    trainParams["grad_clipping"] = gradClipping
     
     states = {}
-    states["gradClipping"] = gradClipping
-    states["ldmvae"] = ldmVAEParams
+    states["ldmvae_params"] = ldmVAEParams
+    states["train_params"] = trainParams
     if epochscomplete > 0:
         states = loadStates(stateName=DIFMODELNAME+f"_{epochscomplete}_EPOCHS_MODEL.pth",
                             model=unet, optimizer=optimizer)
     unet.to(device)
-    gradClipping = states["gradClipping"]
+    gradClipping = states["train_params"]["grad_clipping"]
 
     lossFn = torch.nn.MSELoss(reduction="mean")
 
@@ -148,8 +160,10 @@ if __name__=="__main__":
                         )
         
         epochscomplete = len(results["train_loss"])
+        states["train_params"]["epochs"] = epochscomplete
         states["model"] = unet.state_dict()
         states["optimizer"] = optimizer.state_dict()
+
         saveModelAndResultsMap(model=states, results=results, modelName=DIFMODELNAME+f"_{epochscomplete}_EPOCHS_MODEL.pth",
                                resultsName=DIFRESULTSNAME)
     plotDiffusionLoss(results=results, log=True)
@@ -161,7 +175,7 @@ if __name__=="__main__":
                                    numSamples=5,
                                    imgShape=(VAELATENTCHANNELS, IMGSIZE >> VAENUMDOWN, IMGSIZE >> VAENUMDOWN),
                                    step=TIMESTEPS//10,
-                                   skip=4,
+                                   skip=2,
                                    eta=1.0,
                                    title="",
                                    seed=MANUALSEED,

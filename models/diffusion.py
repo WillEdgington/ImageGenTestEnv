@@ -141,15 +141,34 @@ class ResidualBlock(nn.Module):
             h = self.msaBlock(h)
         return h + self.residualConv(x)
 
+class ResidualCluster(nn.Module):
+    def __init__(self, numBlocks: int, inChannels: int, outChannels: int, timeEmbDim: int, msaHeads: int=0, msaDropout: float=0):
+        super().__init__()
+        assert numBlocks >= 1, "Number of ResidualBlock in a ResidualCluster must be greater than or equal to one."
+        self.cluster = nn.ModuleList([
+            ResidualBlock(inChannels=(inChannels if b==0 else outChannels), outChannels=outChannels, timeEmbDim=timeEmbDim,
+                          msaHeads=msaHeads, msaDropout=msaDropout) for b in range(numBlocks)
+        ])
+
+    def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        for res in self.cluster:
+            x = res(x, t)
+        return x
+
 class UNet(nn.Module):
     def __init__(self, imgInChannels: int=3, imgOutChannnels: int=3, timeEmbDim: int | None=None, depth: int=3,
-                 baseChannels: int=64, numEncHeads: int=0, numDecHeads: int=0, numBotHeads: int=0,
+                 resBlocks: Tuple[int,int,int]|int=1, baseChannels: int=64, numEncHeads: int=0, numDecHeads: int=0, numBotHeads: int=0,
                  encHeadsDropout: float=0, decHeadsDropout: float=0, botHeadsDropout: float=0):
         super().__init__()
         assert depth >= 1, "Depth of encoder/decoder blocks must be at least 1"
 
         if timeEmbDim is None:
             timeEmbDim = baseChannels * 4
+
+        if resBlocks is not None and isinstance(resBlocks, int):
+            resBlocks = (resBlocks, resBlocks, resBlocks)
+
+        assert min(resBlocks) >= 1, "Must have one ResidualBlock per encoder/bottleneck/decoder block."
 
         # Time embedding into an Mlp block
         self.timeMlp = nn.Sequential(
@@ -162,28 +181,46 @@ class UNet(nn.Module):
         inChannel = imgInChannels
         for i in range(depth):
             outChannel = baseChannels << i
-            self.encoder.append(
-                ResidualBlock(inChannels=inChannel, outChannels=outChannel, timeEmbDim=timeEmbDim,
+            if resBlocks[0] == 1:
+                self.encoder.append(
+                    ResidualBlock(inChannels=inChannel, outChannels=outChannel, timeEmbDim=timeEmbDim,
                                   msaHeads=numEncHeads, msaDropout=encHeadsDropout)
-            )
+                )
+            else:
+                self.encoder.append(
+                    ResidualCluster(numBlocks=resBlocks[0], inChannels=inChannel, outChannels=outChannel, timeEmbDim=timeEmbDim,
+                                    msaHeads=numEncHeads, msaDropout=encHeadsDropout)
+                )
+
             inChannel = outChannel
 
         # Use avg pooling for downsampling
         self.downsample = nn.AvgPool2d(kernel_size=2)
 
         # Bottleneck block
-        self.bottle = ResidualBlock(inChannels=inChannel, outChannels=inChannel, timeEmbDim=timeEmbDim,
-                                    msaHeads=numBotHeads, msaDropout=botHeadsDropout)
+        if resBlocks[1] == 1:
+            self.bottle = ResidualBlock(inChannels=inChannel, outChannels=inChannel, timeEmbDim=timeEmbDim,
+                                        msaHeads=numBotHeads, msaDropout=botHeadsDropout)
+        else:
+            self.bottle = ResidualCluster(numBlocks=resBlocks[1], inChannels=inChannel, outChannels=inChannel, timeEmbDim=timeEmbDim,
+                                          msaHeads=numBotHeads, msaDropout=botHeadsDropout)
 
         # Decoder blocks
         self.decoder = nn.ModuleList()
         inChannel = baseChannels << (depth - 1)
         for i in range(depth - 1, -1, -1):
             outChannel = baseChannels << max(0, i-1)
-            self.decoder.append(
-                ResidualBlock(inChannels=inChannel, outChannels=outChannel, timeEmbDim=timeEmbDim,
-                              msaHeads=numDecHeads, msaDropout=decHeadsDropout)
-            )
+            if resBlocks[2] == 1:
+                self.decoder.append(
+                    ResidualBlock(inChannels=inChannel, outChannels=outChannel, timeEmbDim=timeEmbDim,
+                                  msaHeads=numDecHeads, msaDropout=decHeadsDropout)
+                )
+            else:
+                self.decoder.append(
+                    ResidualCluster(numBlocks=resBlocks[2], inChannels=inChannel, outChannels=outChannel, timeEmbDim=timeEmbDim,
+                                    msaHeads=numDecHeads, msaDropout=decHeadsDropout)
+                )
+
             inChannel = outChannel
         
         # Upsample block
