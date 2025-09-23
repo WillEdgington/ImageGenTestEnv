@@ -22,14 +22,18 @@ MANUALSEED = 42
 DATA = "STANFORDCARS" # "CIFAR10" "STANFORDCARS" "CELEBA"
 IMGSIZE = 64
 IMGCHANNELS = 3
+AUGMENT = 1 # preferably between 0 and 1
 
 BATCHSIZE = 256
-EPOCHS = 200
+EPOCHS = 100
 SAVEPOINT = 10
-LR = (1e-4 * (BATCHSIZE / 64))
+lrsf = 4
+LR = (1 * pow(10, -lrsf) * (BATCHSIZE / 64))
 WEIGHTDECAY = (1e-4 * (BATCHSIZE / 64))
 
 datatag = DATA + str(IMGSIZE) if DATA != "CIFAR10" else DATA
+lrtag = f"LR{lrsf}" if lrsf != 4 else ""
+augtag = f"AUG{int(AUGMENT * 10)}" if AUGMENT != 0 else ""
 
 trainParams = {"seed": MANUALSEED,
                "data": DATA,
@@ -76,12 +80,12 @@ TIMESTEPS = 1000
 NSCHEDULE = "Cosine"
 noiseScheduler = CosineNoiseScheduler(timesteps=TIMESTEPS) if NSCHEDULE == "Cosine" else LinearNoiseScheduler(timesteps=TIMESTEPS)
 
-difinfotag = f"LDMDIFFUSION{datatag}{NSCHEDULE}T{TIMESTEPS}BS{BATCHSIZE}D{DIFDEPTH}BC{DIFBASECHANNELS}ERB{DIFRESBLOCKS[0]}EAH{DIFENCHEADS}EAD{int(DIFENCHEADDROP*10)}BRB{DIFRESBLOCKS[1]}BAH{DIFBOTHEADS}BAD{int(DIFBOTHEADDROP*10)}DRB{DIFRESBLOCKS[2]}DAH{DIFDECHEADS}EAD{int(DIFDECHEADDROP*10)}"
+difinfotag = f"LDMDIFFUSION{datatag}{NSCHEDULE}T{TIMESTEPS}BS{BATCHSIZE}D{DIFDEPTH}BC{DIFBASECHANNELS}ERB{DIFRESBLOCKS[0]}EAH{DIFENCHEADS}EAD{int(DIFENCHEADDROP*10)}BRB{DIFRESBLOCKS[1]}BAH{DIFBOTHEADS}BAD{int(DIFBOTHEADDROP*10)}DRB{DIFRESBLOCKS[2]}DAH{DIFDECHEADS}EAD{int(DIFDECHEADDROP*10)}{lrtag}{augtag}"
 DIFRESULTSNAME = f"{difinfotag}_RESULTS.pth"
 DIFMODELNAME = f"{difinfotag}"
 
 if __name__=="__main__":
-    trainDataloader = prepareData(data=DATA, train=True, batchSize=BATCHSIZE, numWorkers=0, seed=MANUALSEED, imgSize=IMGSIZE)
+    trainDataloader = prepareData(data=DATA, train=True, batchSize=BATCHSIZE, numWorkers=0, seed=MANUALSEED, imgSize=IMGSIZE, augment=AUGMENT)
     testDataloader = prepareData(data=DATA, train=False, batchSize=BATCHSIZE, numWorkers=0, imgSize=IMGSIZE)
 
     results = loadResultsMap(resultsName=DIFRESULTSNAME)
@@ -175,8 +179,8 @@ if __name__=="__main__":
                                    numSamples=5,
                                    imgShape=(VAELATENTCHANNELS, IMGSIZE >> VAENUMDOWN, IMGSIZE >> VAENUMDOWN),
                                    step=TIMESTEPS//10,
-                                   skip=2,
-                                   eta=1.0,
+                                   skip=20,
+                                   eta=1,
                                    title="",
                                    seed=MANUALSEED,
                                    device=device)

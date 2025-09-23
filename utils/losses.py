@@ -227,11 +227,15 @@ def plotVAELossAndBeta(results, title: str=""):
     plt.suptitle(t=title)
     plt.show()
 
-def plotDiffusionLoss(results, log: bool=False, title: str=""):
+def plotDiffusionLoss(results, log: bool=False, step: int=1, title: str=""):
     difTrainLoss = results["train_loss"]
     difTestLoss = results["test_loss"]
 
-    epochs = range(1, len(difTrainLoss) + 1)
+    epochs = range(step, len(difTrainLoss) + 1, step)
+
+    if step > 1:
+        difTrainLoss = [difTrainLoss[i] for i in range(step-1, len(difTrainLoss), step)]
+        difTestLoss = [difTestLoss[i] for i in range(step-1, len(difTestLoss), step)]
 
     if log:
         difTrainLoss = np.log(np.array(difTrainLoss))
