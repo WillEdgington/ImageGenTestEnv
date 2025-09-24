@@ -10,7 +10,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from utils.data import prepareData
 from utils.save import loadResultsMap, loadResultsMap, loadStates, saveModelAndResultsMap
-from utils.visualize import plotDiffusionSamples, plotDiffusionTtraversalSamples
+from utils.visualize import plotDiffusionSamples, plotDiffusionTtraversalSamples, plotForwardDiffusion
 from utils.losses import plotDiffusionLoss
 from models.LDM import LDMVAE
 from models.diffusion import UNet, LinearNoiseScheduler, CosineNoiseScheduler
@@ -22,12 +22,12 @@ MANUALSEED = 42
 DATA = "STANFORDCARS" # "CIFAR10" "STANFORDCARS" "CELEBA"
 IMGSIZE = 64
 IMGCHANNELS = 3
-AUGMENT = 1 # preferably between 0 and 1
+AUGMENT = 0.5 # preferably between 0 and 1
 
 BATCHSIZE = 256
 EPOCHS = 100
 SAVEPOINT = 10
-lrsf = 4
+lrsf = 5
 LR = (1 * pow(10, -lrsf) * (BATCHSIZE / 64))
 WEIGHTDECAY = (1e-4 * (BATCHSIZE / 64))
 
@@ -68,7 +68,7 @@ ldmVAEParams = {"baseChannels": VAEBASECHANNELS,
 # Diffusion params
 DIFBASECHANNELS = 128
 DIFTIMEEMBDIM = None
-DIFDEPTH = 3
+DIFDEPTH = 2
 DIFRESBLOCKS = (2, 4, 2)
 DIFENCHEADS = 8
 DIFDECHEADS = 8
@@ -144,6 +144,16 @@ if __name__=="__main__":
             col_width=20,
             row_settings=["var_names"])
     
+    plotForwardDiffusion(dataloader=testDataloader,
+                         noiseScheduler=noiseScheduler,
+                         autoencoder=ldmvae,
+                         numSamples=4,
+                         step=TIMESTEPS//10,
+                         title="",
+                         classLabel=False,
+                         seed=MANUALSEED,
+                         device=device)
+
     while epochscomplete < EPOCHS:
         results = train(model=unet,
                         trainDataloader=trainDataloader,
@@ -170,7 +180,9 @@ if __name__=="__main__":
 
         saveModelAndResultsMap(model=states, results=results, modelName=DIFMODELNAME+f"_{epochscomplete}_EPOCHS_MODEL.pth",
                                resultsName=DIFRESULTSNAME)
-    plotDiffusionLoss(results=results, log=True)
+        
+    plotDiffusionLoss(results=results, log=False,
+                      step=SAVEPOINT)
     plotDiffusionSamples(results=results, 
                          step=EPOCHS//10)
     plotDiffusionTtraversalSamples(model=unet,

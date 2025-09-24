@@ -265,12 +265,13 @@ def plotDiffusionTtraversalSamples(model: torch.nn.Module,
 
 def plotForwardDiffusion(dataloader: torch.utils.data.DataLoader,
                          noiseScheduler: NoiseScheduler,
+                         autoencoder: LDMVAE|None=None,
                          numSamples: int=1,
                          step: int=1,
                          title: str="",
                          classLabel: bool=False,
-                         seed: int=42):
-    device = "cpu"
+                         seed: int=42,
+                         device: torch.device="cuda" if torch.cuda.is_available() else "cpu"):
     batch = next(iter(dataloader))
     assert numSamples <= len(batch[0]), f"numSamples must be less than batch size of dataloader, numSamples: {numSamples}, batch size: {len(batch)}"
     
@@ -286,12 +287,17 @@ def plotForwardDiffusion(dataloader: torch.utils.data.DataLoader,
     samples = [x0batch]
     rangeLabels = [[x0batch.min().item(), x0batch.max().item()]]
 
+    if autoencoder is not None:
+        x0batch = autoencoder.encode(x0batch)[0].detach()
+
     for t in tlist:
         tbatch = torch.full((numSamples,), t-1, device=device, dtype=torch.int64)
         noise = torch.randn_like(x0batch)
 
         alphahatt = noiseScheduler.getNoiseLevel(tbatch).view(numSamples, 1, 1, 1)
         xtbatch = (torch.sqrt(alphahatt) * x0batch) + (torch.sqrt(1 - alphahatt) * noise)
+        if autoencoder is not None:
+            xtbatch = autoencoder.decode(xtbatch).detach()
         samples.append(xtbatch)
         rangeLabels.append([xtbatch.min().item(), xtbatch.max().item()])
     
