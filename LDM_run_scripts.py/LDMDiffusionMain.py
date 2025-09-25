@@ -22,10 +22,10 @@ MANUALSEED = 42
 DATA = "STANFORDCARS" # "CIFAR10" "STANFORDCARS" "CELEBA"
 IMGSIZE = 64
 IMGCHANNELS = 3
-AUGMENT = 0.5 # preferably between 0 and 1
+AUGMENT = 0.2 # preferably between 0 and 1
 
 BATCHSIZE = 256
-EPOCHS = 100
+EPOCHS = 200
 SAVEPOINT = 10
 lrsf = 5
 LR = (1 * pow(10, -lrsf) * (BATCHSIZE / 64))
@@ -69,10 +69,10 @@ ldmVAEParams = {"baseChannels": VAEBASECHANNELS,
 DIFBASECHANNELS = 128
 DIFTIMEEMBDIM = None
 DIFDEPTH = 2
-DIFRESBLOCKS = (2, 4, 2)
+DIFRESBLOCKS = (4, 8, 4)
 DIFENCHEADS = 8
-DIFDECHEADS = 8
-DIFBOTHEADS = 16
+DIFDECHEADS = 16
+DIFBOTHEADS = 32
 DIFENCHEADDROP = 0.1
 DIFDECHEADDROP = 0.1
 DIFBOTHEADDROP = 0.1
@@ -181,8 +181,8 @@ if __name__=="__main__":
         saveModelAndResultsMap(model=states, results=results, modelName=DIFMODELNAME+f"_{epochscomplete}_EPOCHS_MODEL.pth",
                                resultsName=DIFRESULTSNAME)
         
-    plotDiffusionLoss(results=results, log=False,
-                      step=SAVEPOINT)
+    plotDiffusionLoss(results=results, log=True,
+                      step=1)
     plotDiffusionSamples(results=results, 
                          step=EPOCHS//10)
     plotDiffusionTtraversalSamples(model=unet,
@@ -191,7 +191,7 @@ if __name__=="__main__":
                                    numSamples=5,
                                    imgShape=(VAELATENTCHANNELS, IMGSIZE >> VAENUMDOWN, IMGSIZE >> VAENUMDOWN),
                                    step=TIMESTEPS//10,
-                                   skip=20,
+                                   skip=5,
                                    eta=1,
                                    title="",
                                    seed=MANUALSEED,

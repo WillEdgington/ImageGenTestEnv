@@ -285,10 +285,10 @@ def plotForwardDiffusion(dataloader: torch.utils.data.DataLoader,
     labels = batch[1][:numSamples].to(device)
     x0batch = batch[0][:numSamples].to(device)
     samples = [x0batch]
-    rangeLabels = [[x0batch.min().item(), x0batch.max().item()]]
 
     if autoencoder is not None:
         x0batch = autoencoder.encode(x0batch)[0].detach()
+    rangeLabels = [[x0batch.min().item(), x0batch.max().item()]]
 
     for t in tlist:
         tbatch = torch.full((numSamples,), t-1, device=device, dtype=torch.int64)
@@ -296,10 +296,10 @@ def plotForwardDiffusion(dataloader: torch.utils.data.DataLoader,
 
         alphahatt = noiseScheduler.getNoiseLevel(tbatch).view(numSamples, 1, 1, 1)
         xtbatch = (torch.sqrt(alphahatt) * x0batch) + (torch.sqrt(1 - alphahatt) * noise)
+        rangeLabels.append([xtbatch.min().item(), xtbatch.max().item()])
         if autoencoder is not None:
             xtbatch = autoencoder.decode(xtbatch).detach()
         samples.append(xtbatch)
-        rangeLabels.append([xtbatch.min().item(), xtbatch.max().item()])
     
     fig, axes = plt.subplots(nrows=numSamples,
                              ncols=len(samples),
@@ -325,3 +325,6 @@ def plotForwardDiffusion(dataloader: torch.utils.data.DataLoader,
     plt.suptitle(f"{title} Forward diffusion")
     plt.tight_layout()
     plt.show()
+
+def plotDiffusionSamplingFromNoisedData():
+    pass

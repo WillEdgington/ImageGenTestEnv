@@ -135,7 +135,7 @@ def train(model: torch.nn.Module,
         xTbatch = torch.randn(numGeneratedSamples, imgShape[0], imgShape[1], imgShape[2], device="cpu")
 
     for epoch in tqdm(range(epochs)):
-        torch.manual_seed(seed+epoch)
+        torch.manual_seed(seed+epoch+initialEpoch)
         trainLoss = trainStep(model=model,
                               dataloader=trainDataloader,
                               optimizer=optimizer,
