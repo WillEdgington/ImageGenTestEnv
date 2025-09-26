@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from utils.data import prepareData
-from utils.save import saveModelAndResultsMap, loadResultsMap, loadModel, loadStates
+from utils.save import saveModelAndResultsMap, loadResultsMap, loadModel, loadStates, deleteModel
 from models.LDM import LDMVAE
 from models.vae import AdaptiveMomentBetaScheduler
 from train.trainVae import train
@@ -103,6 +103,10 @@ if __name__=="__main__":
 
         saveModelAndResultsMap(model=states, results=results, modelName=MODELNAME+f"_{epochscomplete}_EPOCHS_MODEL.pth",
                                resultsName=RESULTSNAME)
+        
+        if epochscomplete > 100:
+            deleteModel(modelName=MODELNAME+f"_{epochscomplete-100}_EPOCHS_MODEL.pth")
+
     plotVAEDecoderSamples(results=results, step=EPOCHS//10)
     plotVAELossAndBeta(results=results)
     plotVAELossGradients(results=results, alpha=0.3)

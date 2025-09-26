@@ -3,6 +3,19 @@ import os
 
 from pathlib import Path
 
+def deleteFile(fileName: str, fileDir: str):
+    filePath = os.path.join(fileDir, fileName)
+    try:
+        os.remove(filePath)
+        print(f"File deleted: {filePath}")
+    except FileNotFoundError:
+        print(f"File not found: {filePath}")
+    except Exception as e:
+        print(f"Error deleting {filePath}: {e}")
+
+def deleteModel(modelName: str, modelDir: str="saved_models"):
+    deleteFile(fileName=modelName, fileDir=modelDir)
+
 def saveTorchObject(obj, targetDir: str, fileName: str):
     targetDirPath = Path(targetDir)
     targetDirPath.mkdir(parents=True, exist_ok=True)

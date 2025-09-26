@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from utils.data import prepareData
-from utils.save import loadResultsMap, loadResultsMap, loadStates, saveModelAndResultsMap
+from utils.save import loadResultsMap, loadResultsMap, loadStates, saveModelAndResultsMap, deleteModel
 from utils.visualize import plotDiffusionSamples, plotDiffusionTtraversalSamples, plotForwardDiffusion, plotDiffusionSamplingFromNoisedData
 from utils.losses import plotDiffusionLoss
 from models.LDM import LDMVAE
@@ -22,12 +22,12 @@ MANUALSEED = 42
 DATA = "STANFORDCARS" # "CIFAR10" "STANFORDCARS" "CELEBA"
 IMGSIZE = 64
 IMGCHANNELS = 3
-AUGMENT = 0.2 # preferably between 0 and 1
+AUGMENT = 0.1 # preferably between 0 and 1
 
 BATCHSIZE = 256
-EPOCHS = 700
+EPOCHS = 200
 SAVEPOINT = 10
-lrsf = 5
+lrsf = 4
 LR = (1 * pow(10, -lrsf) * (BATCHSIZE / 64))
 WEIGHTDECAY = (1e-4 * (BATCHSIZE / 64))
 
@@ -73,10 +73,10 @@ ldmVAEParams = {"baseChannels": VAEBASECHANNELS,
 DIFBASECHANNELS = 128
 DIFTIMEEMBDIM = None
 DIFDEPTH = 2
-DIFRESBLOCKS = (4, 8, 4)
-DIFENCHEADS = 8
-DIFDECHEADS = 16
-DIFBOTHEADS = 32
+DIFRESBLOCKS = (2, 4, 2)
+DIFENCHEADS = 4
+DIFDECHEADS = 4
+DIFBOTHEADS = 8
 DIFENCHEADDROP = 0.1
 DIFDECHEADDROP = 0.1
 DIFBOTHEADDROP = 0.1
@@ -185,6 +185,9 @@ if __name__=="__main__":
         saveModelAndResultsMap(model=states, results=results, modelName=DIFMODELNAME+f"_{epochscomplete}_EPOCHS_MODEL.pth",
                                resultsName=DIFRESULTSNAME)
         
+        if epochscomplete > 100:
+            deleteModel(modelName=DIFMODELNAME+f"_{epochscomplete-100}_EPOCHS_MODEL.pth") # Delete model 100 epochs before current epoch
+        
     plotDiffusionLoss(results=results, log=True,
                       step=10)
     plotDiffusionSamples(results=results, 
@@ -198,7 +201,7 @@ if __name__=="__main__":
                                    skip=2,
                                    eta=1,
                                    title="",
-                                   seed=13,
+                                   seed=MANUALSEED,
                                    device=device)
     plotDiffusionSamplingFromNoisedData(model=unet,
                                         dataloader=testDataloader,
