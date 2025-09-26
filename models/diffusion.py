@@ -252,12 +252,17 @@ class UNet(nn.Module):
 def sample(model: torch.nn.Module,
            noiseScheduler: NoiseScheduler,
            xT: torch.Tensor,
+           t: int|None=None,
            autoencoder: LDMVAE|None=None,
            skip: int=1,
            eta: float=1.0,
            getSteps: int | None=None,
            device: torch.device="cuda" if torch.cuda.is_available() else "cpu") -> torch.Tensor | List[Tuple[int, torch.Tensor]]:
     timesteps = noiseScheduler.timesteps
+    if t is None:
+        t = timesteps
+
+    assert t <= timesteps, f"t value must be less than or equal to T. t: {t}, T: {timesteps}"
     assert skip <= timesteps, f"skip variable must be less than or equal to T. T: {timesteps}"
     assert (getSteps is None) or (getSteps % skip == 0), f"getSteps must be divisible by skip. getSteps: {getSteps}, skip: {skip}"
 
@@ -265,7 +270,6 @@ def sample(model: torch.nn.Module,
 
     if getSteps is not None:
         samples = []
-    t = timesteps
 
     while t > 0:
         if getSteps is not None and (timesteps - t) % getSteps == 0:

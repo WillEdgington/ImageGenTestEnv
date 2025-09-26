@@ -19,12 +19,13 @@ from utils.losses import plotVAELossAndBeta, plotVAELossGradients
 device = "cuda" if torch.cuda.is_available() else "cpu"
 MANUALSEED = 42
 DATA = "STANFORDCARS" # "CIFAR10" "STANFORDCARS" "CELEBA"
-IMGSIZE = 64
+IMGSIZE = 128
 IMGCHANNELS = 3
+AUGMENT = 0.2
 
 BASECHANNELS = 64
 LATENTCHANNELS = 8
-NUMDOWN = 3
+NUMDOWN = 4
 RESBLOCKS = (2, 2)
 NUMRESCONVS = (2, 2)
 ISSTOCHASTIC = True
@@ -32,17 +33,20 @@ ISSTOCHASTIC = True
 BATCHSIZE = 64
 EPOCHS = 100
 SAVEPOINT = 10
-LR = (1e-4 * (BATCHSIZE / 64))
+lrsf = 5
+LR = (1 * pow(10, -lrsf) * (BATCHSIZE / 64))
 WEIGHTDECAY = (1e-4 * (BATCHSIZE / 64))
 
+lrtag = f"LR{lrsf}" if lrsf != 4 else ""
+augtag = f"AUG{int(AUGMENT * 10)}" if AUGMENT != 0 else ""
 datatag = DATA + str(IMGSIZE) if DATA != "CIFAR10" else DATA
 stochtag = "STOCH" if ISSTOCHASTIC else ""
-infostr = f"LDMVAE{datatag}BC{BASECHANNELS}LC{LATENTCHANNELS}ND{NUMDOWN}RBE{RESBLOCKS[0]}RBD{RESBLOCKS[1]}NRCE{NUMRESCONVS[0]}NRCE{NUMRESCONVS[1]}BS{BATCHSIZE}{stochtag}"
+infostr = f"LDMVAE{datatag}BC{BASECHANNELS}LC{LATENTCHANNELS}ND{NUMDOWN}RBE{RESBLOCKS[0]}RBD{RESBLOCKS[1]}NRCE{NUMRESCONVS[0]}NRCE{NUMRESCONVS[1]}BS{BATCHSIZE}{lrtag}{augtag}{stochtag}"
 RESULTSNAME = f"{infostr}_RESULTS.pth"
 MODELNAME = f"{infostr}"
 
 if __name__=="__main__":
-    trainDataloader = prepareData(data=DATA, batchSize=BATCHSIZE, numWorkers=0, seed=MANUALSEED, imgSize=IMGSIZE)
+    trainDataloader = prepareData(data=DATA, batchSize=BATCHSIZE, numWorkers=0, seed=MANUALSEED, imgSize=IMGSIZE, augment=AUGMENT)
     testDataloader = prepareData(data=DATA, train=False, batchSize=BATCHSIZE, numWorkers=0, imgSize=IMGSIZE)
 
     results = loadResultsMap(resultsName=RESULTSNAME)

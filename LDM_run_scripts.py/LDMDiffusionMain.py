@@ -10,7 +10,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from utils.data import prepareData
 from utils.save import loadResultsMap, loadResultsMap, loadStates, saveModelAndResultsMap
-from utils.visualize import plotDiffusionSamples, plotDiffusionTtraversalSamples, plotForwardDiffusion
+from utils.visualize import plotDiffusionSamples, plotDiffusionTtraversalSamples, plotForwardDiffusion, plotDiffusionSamplingFromNoisedData
 from utils.losses import plotDiffusionLoss
 from models.LDM import LDMVAE
 from models.diffusion import UNet, LinearNoiseScheduler, CosineNoiseScheduler
@@ -25,7 +25,7 @@ IMGCHANNELS = 3
 AUGMENT = 0.2 # preferably between 0 and 1
 
 BATCHSIZE = 256
-EPOCHS = 200
+EPOCHS = 700
 SAVEPOINT = 10
 lrsf = 5
 LR = (1 * pow(10, -lrsf) * (BATCHSIZE / 64))
@@ -52,8 +52,12 @@ VAERESBLOCKS = (2, 2)
 VAENUMRESCONVS = (2, 2)
 VAEISSTOCHASTIC = True
 VAEEPOCHS = 100
+VAEAUG = 0
+VAELRSF = 4
+vaelrtag = f"LR{VAELRSF}" if VAELRSF != 4 else ""
+vaeaugtag = f"AUG{int(VAEAUG * 10)}" if VAEAUG != 0 else ""
 stochtag = "STOCH" if VAEISSTOCHASTIC else ""
-VAENAME = f"LDMVAE{datatag}BC{VAEBASECHANNELS}LC{VAELATENTCHANNELS}ND{VAENUMDOWN}RBE{VAERESBLOCKS[0]}RBD{VAERESBLOCKS[1]}NRCE{VAENUMRESCONVS[0]}NRCE{VAENUMRESCONVS[1]}BS{VAEBATCHSIZE}{stochtag}_{VAEEPOCHS}_EPOCHS_MODEL.pth"
+VAENAME = f"LDMVAE{datatag}BC{VAEBASECHANNELS}LC{VAELATENTCHANNELS}ND{VAENUMDOWN}RBE{VAERESBLOCKS[0]}RBD{VAERESBLOCKS[1]}NRCE{VAENUMRESCONVS[0]}NRCE{VAENUMRESCONVS[1]}BS{VAEBATCHSIZE}{vaelrtag}{vaeaugtag}{stochtag}_{VAEEPOCHS}_EPOCHS_MODEL.pth"
 
 ldmVAEParams = {"baseChannels": VAEBASECHANNELS,
                 "vaeBatchSize": VAEBATCHSIZE,
@@ -182,7 +186,7 @@ if __name__=="__main__":
                                resultsName=DIFRESULTSNAME)
         
     plotDiffusionLoss(results=results, log=True,
-                      step=1)
+                      step=10)
     plotDiffusionSamples(results=results, 
                          step=EPOCHS//10)
     plotDiffusionTtraversalSamples(model=unet,
@@ -191,9 +195,21 @@ if __name__=="__main__":
                                    numSamples=5,
                                    imgShape=(VAELATENTCHANNELS, IMGSIZE >> VAENUMDOWN, IMGSIZE >> VAENUMDOWN),
                                    step=TIMESTEPS//10,
-                                   skip=5,
+                                   skip=2,
                                    eta=1,
                                    title="",
-                                   seed=MANUALSEED,
+                                   seed=13,
                                    device=device)
+    plotDiffusionSamplingFromNoisedData(model=unet,
+                                        dataloader=testDataloader,
+                                        noiseScheduler=noiseScheduler,
+                                        autoencoder=ldmvae,
+                                        numSamples=3,
+                                        step=TIMESTEPS//10,
+                                        skip=5,
+                                        eta=1,
+                                        title="",
+                                        classLabel=False,
+                                        seed=MANUALSEED,
+                                        device=device)
     

@@ -282,12 +282,12 @@ def plotForwardDiffusion(dataloader: torch.utils.data.DataLoader,
     if tlist[-1] != timesteps:
         tlist.append(timesteps)
 
-    labels = batch[1][:numSamples].to(device)
+    labels = batch[1][:numSamples].cpu()
     x0batch = batch[0][:numSamples].to(device)
-    samples = [x0batch]
 
     if autoencoder is not None:
         x0batch = autoencoder.encode(x0batch)[0].detach()
+    samples = [autoencoder.decode(x0batch).detach()]
     rangeLabels = [[x0batch.min().item(), x0batch.max().item()]]
 
     for t in tlist:
@@ -326,5 +326,81 @@ def plotForwardDiffusion(dataloader: torch.utils.data.DataLoader,
     plt.tight_layout()
     plt.show()
 
-def plotDiffusionSamplingFromNoisedData():
-    pass
+def plotDiffusionSamplingFromNoisedData(model: torch.nn.Module,
+                                        dataloader: torch.utils.data.DataLoader,
+                                        noiseScheduler: NoiseScheduler,
+                                        autoencoder: LDMVAE|None=None,
+                                        numSamples: int=1,
+                                        step: int=10,
+                                        skip: int=1,
+                                        eta: float=1.0,
+                                        title: str="",
+                                        classLabel: bool=False,
+                                        seed: int|None=None,
+                                        device: torch.device="cuda" if torch.cuda.is_available() else "cpu"):
+    timesteps = noiseScheduler.timesteps
+    assert step < timesteps, f"sample step must be less than total timesteps. step: {step}, timesteps: {timesteps}"
+
+    batch = next(iter(dataloader))
+    assert numSamples <= len(batch[0]), f"numSamples must be less than batch size of dataloader, numSamples: {numSamples}, batch size: {len(batch)}"
+
+    if seed is not None:
+        torch.manual_seed(seed)
+
+    labels = batch[1][:numSamples].cpu()
+    tlist = [t for t in range(step, timesteps+1, step)]
+    if tlist[-1] != timesteps:
+        tlist.append(timesteps)
+
+    x0batch = batch[0][:numSamples].to(device)
+    noisedSamples = []
+    samples = [x0batch]
+
+    if autoencoder is not None:
+        x0batch = autoencoder.encode(x0batch)[0].detach()
+
+    for t in tlist:
+        tbatch = torch.full((numSamples,), t-1, device=device, dtype=torch.int64)
+        noise = torch.randn_like(x0batch)
+
+        alphahatt = noiseScheduler.getNoiseLevel(tbatch).view(numSamples, 1, 1, 1)
+        xtbatch = (torch.sqrt(alphahatt) * x0batch) + (torch.sqrt(1 - alphahatt) * noise)
+        noisedSamples.append(xtbatch)
+    
+    # denoise using sample method
+    samples = [autoencoder.decode(x0batch).detach()]
+    for i, xt in enumerate(noisedSamples):
+        x0hat = sample(model=model,
+                       noiseScheduler=noiseScheduler,
+                       xT=xt,
+                       t=tlist[i],
+                       autoencoder=autoencoder,
+                       skip=skip,
+                       eta=eta,
+                       device=device)
+        samples.append(x0hat)
+
+    # plot
+    tlist = [0] + tlist
+
+    fig, axes = plt.subplots(nrows=numSamples,
+                             ncols=len(samples),
+                             figsize=(len(samples), numSamples))
+    
+    if numSamples == 1:
+        axes = axes[np.newaxis, :]
+
+    for row in range(numSamples):
+        for col in range(len(samples)):
+            img = samples[col][row].detach().cpu()
+            img = (torch.clamp(img, -1, 1) + 1) / 2
+            permutedImg = img.permute(1,2,0).numpy()
+            axes[row, col].imshow(permutedImg)
+            axes[row, col].axis('off')
+            if row == 0:
+                axes[row, col].set_title(f"t={tlist[col]}", fontsize=10)
+
+    fig.text(0.5, 0.04, 't value', ha='center')
+    plt.suptitle(f"{title} sampling attempts from given t (skip: {skip}, eta: {eta})")
+    plt.tight_layout()
+    plt.show()
