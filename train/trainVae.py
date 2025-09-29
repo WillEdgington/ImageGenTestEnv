@@ -126,6 +126,7 @@ def train(model: VAE|LDMVAE,
           epochs: int,
           beta: float=1.0,
           enableAmp: bool=False,
+          seed: int=42,
           device: torch.device="cuda" if torch.cuda.is_available() else "cpu",
           latentDim: int=100,
           decSamplesPerEpoch: int=0,
@@ -134,6 +135,7 @@ def train(model: VAE|LDMVAE,
           results: Dict[str, list] | None=None) -> Dict[str, list]:
     assert decSamplesPerEpoch <= 10, f"genSamplesPerEpoch must be less than or equal to 10, currently it is {decSamplesPerEpoch}"
     model.to(device)
+    torch.manual_seed(seed)
 
     initialEpoch = 1
     if results is not None:
@@ -159,6 +161,7 @@ def train(model: VAE|LDMVAE,
         latentVectors = torch.randn(decSamplesPerEpoch, *latentShape).to(device)
     
     for epoch in tqdm(range(epochs)):
+        torch.manual_seed(seed + epoch + initialEpoch)
         # Run a training step
         trainLoss, DklTrainLoss, reconTrainLoss, activeDimsTrain, latentStdTrain = trainStep(model=model,
                                                                                              dataloader=trainDataloader,

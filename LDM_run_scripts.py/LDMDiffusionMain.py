@@ -20,11 +20,11 @@ from train.trainDiffusion import train
 device = "cuda" if torch.cuda.is_available() else "cpu"
 MANUALSEED = 42
 DATA = "STANFORDCARS" # "CIFAR10" "STANFORDCARS" "CELEBA"
-IMGSIZE = 64
+IMGSIZE = 128
 IMGCHANNELS = 3
-AUGMENT = 0.1 # preferably between 0 and 1
+AUGMENT = 0.3 # preferably between 0 and 1
 
-BATCHSIZE = 256
+BATCHSIZE = 128
 EPOCHS = 200
 SAVEPOINT = 10
 lrsf = 4
@@ -44,15 +44,15 @@ trainParams = {"seed": MANUALSEED,
                "weight_decay": WEIGHTDECAY}
 
 # Autoencoder params
-VAEBATCHSIZE = 64
+VAEBATCHSIZE = 32
 VAEBASECHANNELS = 64
-VAELATENTCHANNELS = 8
-VAENUMDOWN = 3
+VAELATENTCHANNELS = 12
+VAENUMDOWN = 4
 VAERESBLOCKS = (2, 2)
 VAENUMRESCONVS = (2, 2)
 VAEISSTOCHASTIC = True
 VAEEPOCHS = 100
-VAEAUG = 0
+VAEAUG = 0.2
 VAELRSF = 4
 vaelrtag = f"LR{VAELRSF}" if VAELRSF != 4 else ""
 vaeaugtag = f"AUG{int(VAEAUG * 10)}" if VAEAUG != 0 else ""
@@ -73,10 +73,10 @@ ldmVAEParams = {"baseChannels": VAEBASECHANNELS,
 DIFBASECHANNELS = 128
 DIFTIMEEMBDIM = None
 DIFDEPTH = 2
-DIFRESBLOCKS = (2, 4, 2)
-DIFENCHEADS = 4
-DIFDECHEADS = 4
-DIFBOTHEADS = 8
+DIFRESBLOCKS = (4, 8, 4)
+DIFENCHEADS = 8
+DIFDECHEADS = 16
+DIFBOTHEADS = 32
 DIFENCHEADDROP = 0.1
 DIFDECHEADDROP = 0.1
 DIFBOTHEADDROP = 0.1
@@ -189,7 +189,7 @@ if __name__=="__main__":
             deleteModel(modelName=DIFMODELNAME+f"_{epochscomplete-100}_EPOCHS_MODEL.pth") # Delete model 100 epochs before current epoch
         
     plotDiffusionLoss(results=results, log=True,
-                      step=10)
+                      step=1)
     plotDiffusionSamples(results=results, 
                          step=EPOCHS//10)
     plotDiffusionTtraversalSamples(model=unet,
@@ -209,7 +209,7 @@ if __name__=="__main__":
                                         autoencoder=ldmvae,
                                         numSamples=3,
                                         step=TIMESTEPS//10,
-                                        skip=5,
+                                        skip=2,
                                         eta=1,
                                         title="",
                                         classLabel=False,
