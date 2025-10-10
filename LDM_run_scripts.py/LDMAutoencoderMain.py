@@ -18,22 +18,22 @@ from utils.losses import plotVAELossAndBeta, plotVAELossGradients
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 MANUALSEED = 42
-DATA = "STANFORDCARS" # "CIFAR10" "STANFORDCARS" "CELEBA"
-IMGSIZE = 128
+DATA = "CIFAR10" # "CIFAR10" "STANFORDCARS" "CELEBA"
+IMGSIZE = 32
 IMGCHANNELS = 3
-AUGMENT = 0.2
+AUGMENT = 0
 
-BASECHANNELS = 64
-LATENTCHANNELS = 12
-NUMDOWN = 4
-RESBLOCKS = (2, 2)
+BASECHANNELS = 128
+LATENTCHANNELS = 4
+NUMDOWN = 2
+RESBLOCKS = (4, 4)
 NUMRESCONVS = (2, 2)
 ISSTOCHASTIC = True
 
-BATCHSIZE = 32
-EPOCHS = 100
+BATCHSIZE = 64
+EPOCHS = 80
 SAVEPOINT = 10
-lrsf = 4
+lrsf = 5
 LR = (1 * pow(10, -lrsf) * (BATCHSIZE / 64))
 WEIGHTDECAY = (1e-4 * (BATCHSIZE / 64))
 
@@ -109,9 +109,9 @@ if __name__=="__main__":
 
     plotVAEDecoderSamples(results=results, step=EPOCHS//10)
     plotVAELossAndBeta(results=results)
-    plotVAELossGradients(results=results, alpha=0.3)
+    plotVAELossGradients(results=results, alpha=0.1)
     visualiseVAELatentTraversal(vae=ldmvae,
                                 testDataloader=testDataloader,
                                 numSamples=5,
-                                latentIdx=(5,0,0),
+                                latentIdx=(0,0,0),
                                 steps=11)

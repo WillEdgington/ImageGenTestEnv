@@ -163,14 +163,20 @@ def visualiseVAELatentTraversal(vae: VAE|LDMVAE,
 
 def plotDiffusionSamples(results: Dict[str, list],
                          step: int=1,
+                         interval: Tuple[int, int]|None=None,
                          title: str=""):
     genSamples = results["generated_samples"]
     epochs = len(genSamples)
     imgsPerSample = genSamples[0].size(0)
 
+    assert interval is None or (interval[0] > 0 and interval[1] <= epochs), f"interval tuple must be in the inclusive range: [1, {epochs}]"
     assert epochs >= step, f"No epochs matched the step={step}. try a smaller step"
 
-    selectedEpochs = [i for i in range(step, epochs+1, step)]
+    start = step if interval is None else interval[0]
+    step = step if interval is None else (interval[1] - interval[0]) // 10
+    epochs = epochs if interval is None else interval[1]
+
+    selectedEpochs = [i for i in range(start, epochs+1, step)]
     selectedSamples = [genSamples[i-1] for i in selectedEpochs]
     numCols = len(selectedEpochs)
 
@@ -287,7 +293,9 @@ def plotForwardDiffusion(dataloader: torch.utils.data.DataLoader,
 
     if autoencoder is not None:
         x0batch = autoencoder.encode(x0batch)[0].detach()
-    samples = [autoencoder.decode(x0batch).detach()]
+        samples = [autoencoder.decode(x0batch).detach()]
+    else:
+        samples = [x0batch]
     rangeLabels = [[x0batch.min().item(), x0batch.max().item()]]
 
     for t in tlist:
@@ -354,7 +362,6 @@ def plotDiffusionSamplingFromNoisedData(model: torch.nn.Module,
 
     x0batch = batch[0][:numSamples].to(device)
     noisedSamples = []
-    samples = [x0batch]
 
     if autoencoder is not None:
         x0batch = autoencoder.encode(x0batch)[0].detach()
@@ -368,7 +375,7 @@ def plotDiffusionSamplingFromNoisedData(model: torch.nn.Module,
         noisedSamples.append(xtbatch)
     
     # denoise using sample method
-    samples = [autoencoder.decode(x0batch).detach()]
+    samples = [autoencoder.decode(x0batch).detach() if autoencoder is not None else x0batch]
     for i, xt in enumerate(noisedSamples):
         x0hat = sample(model=model,
                        noiseScheduler=noiseScheduler,

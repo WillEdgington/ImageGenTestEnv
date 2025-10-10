@@ -25,7 +25,7 @@ IMGCHANNELS = 3
 AUGMENT = 0.3 # preferably between 0 and 1
 
 BATCHSIZE = 128
-EPOCHS = 200
+EPOCHS = 600
 SAVEPOINT = 10
 lrsf = 4
 LR = (1 * pow(10, -lrsf) * (BATCHSIZE / 64))
@@ -67,15 +67,17 @@ ldmVAEParams = {"baseChannels": VAEBASECHANNELS,
                 "numResConvs": VAENUMRESCONVS,
                 "isStochastic": VAEISSTOCHASTIC,
                 "epochs": VAEEPOCHS,
+                "augment": VAEAUG,
+                "learning_rate": VAELRSF,
                 "name": VAENAME}
 
 # Diffusion params
-DIFBASECHANNELS = 128
+DIFBASECHANNELS = 256
 DIFTIMEEMBDIM = None
 DIFDEPTH = 2
 DIFRESBLOCKS = (4, 8, 4)
-DIFENCHEADS = 8
-DIFDECHEADS = 16
+DIFENCHEADS = 16
+DIFDECHEADS = 32
 DIFBOTHEADS = 32
 DIFENCHEADDROP = 0.1
 DIFDECHEADDROP = 0.1
@@ -88,12 +90,15 @@ difinfotag = f"LDMDIFFUSION{datatag}{NSCHEDULE}T{TIMESTEPS}BS{BATCHSIZE}D{DIFDEP
 DIFRESULTSNAME = f"{difinfotag}_RESULTS.pth"
 DIFMODELNAME = f"{difinfotag}"
 
+TITLE = f"{DATA} ({IMGSIZE}x{IMGSIZE}) Latent Diffusion Model (Schedule: {NSCHEDULE}, T: {TIMESTEPS}, ENC/DEC depth: {DIFDEPTH}, base channels: {DIFBASECHANNELS})"
+
 if __name__=="__main__":
+    print(f"{DIFMODELNAME}")
     trainDataloader = prepareData(data=DATA, train=True, batchSize=BATCHSIZE, numWorkers=0, seed=MANUALSEED, imgSize=IMGSIZE, augment=AUGMENT)
     testDataloader = prepareData(data=DATA, train=False, batchSize=BATCHSIZE, numWorkers=0, imgSize=IMGSIZE)
 
     results = loadResultsMap(resultsName=DIFRESULTSNAME)
-    epochscomplete = len(results["train_loss"]) if results is not None else 0
+    epochscomplete = min(len(results["train_loss"]), EPOCHS) if results is not None else 0
 
     torch.manual_seed(MANUALSEED)
     ldmvae = LDMVAE(imgChannels=IMGCHANNELS,
@@ -147,13 +152,13 @@ if __name__=="__main__":
             col_names=["input_size", "output_size", "num_params", "trainable"],
             col_width=20,
             row_settings=["var_names"])
-    
+    print(DIFMODELNAME+f"_{epochscomplete}_EPOCHS_MODEL.pth")
     plotForwardDiffusion(dataloader=testDataloader,
                          noiseScheduler=noiseScheduler,
                          autoencoder=ldmvae,
                          numSamples=4,
                          step=TIMESTEPS//10,
-                         title="",
+                         title=f"{DATA}, {NSCHEDULE} scheduler Latent",
                          classLabel=False,
                          seed=MANUALSEED,
                          device=device)
@@ -181,7 +186,7 @@ if __name__=="__main__":
         states["train_params"]["epochs"] = epochscomplete
         states["model"] = unet.state_dict()
         states["optimizer"] = optimizer.state_dict()
-
+    
         saveModelAndResultsMap(model=states, results=results, modelName=DIFMODELNAME+f"_{epochscomplete}_EPOCHS_MODEL.pth",
                                resultsName=DIFRESULTSNAME)
         
@@ -189,29 +194,34 @@ if __name__=="__main__":
             deleteModel(modelName=DIFMODELNAME+f"_{epochscomplete-100}_EPOCHS_MODEL.pth") # Delete model 100 epochs before current epoch
         
     plotDiffusionLoss(results=results, log=True,
-                      step=1)
+                      step=SAVEPOINT,
+                      title=TITLE)
     plotDiffusionSamples(results=results, 
-                         step=EPOCHS//10)
+                         step=EPOCHS//10,
+                         interval=(EPOCHS-100, EPOCHS) if EPOCHS > 200 else None,
+                         title=TITLE)
+    
     plotDiffusionTtraversalSamples(model=unet,
                                    noiseScheduler=noiseScheduler,
                                    autoencoder=ldmvae,
                                    numSamples=5,
                                    imgShape=(VAELATENTCHANNELS, IMGSIZE >> VAENUMDOWN, IMGSIZE >> VAENUMDOWN),
                                    step=TIMESTEPS//10,
-                                   skip=2,
+                                   skip=1,
                                    eta=1,
-                                   title="",
+                                   title=TITLE,
                                    seed=MANUALSEED,
                                    device=device)
+    
     plotDiffusionSamplingFromNoisedData(model=unet,
                                         dataloader=testDataloader,
                                         noiseScheduler=noiseScheduler,
                                         autoencoder=ldmvae,
-                                        numSamples=3,
+                                        numSamples=4,
                                         step=TIMESTEPS//10,
-                                        skip=2,
+                                        skip=1,
                                         eta=1,
-                                        title="",
+                                        title=TITLE,
                                         classLabel=False,
                                         seed=MANUALSEED,
                                         device=device)
