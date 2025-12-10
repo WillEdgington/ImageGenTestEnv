@@ -108,7 +108,7 @@ class LDMVAE(nn.Module):
         self.encoder = Encoder(inChannels=imgChannels, baseChannels=baseChannels, latentChannels=latentChannels, 
                                numDown=numDown, resBlocks=resBlocks[0], numResConvs=numResConvs[0])
         self.decoder = Decoder(outChannels=imgChannels, baseChannels=baseChannels, latentChannels=latentChannels, 
-                               numDown=numDown, resBlocks=resBlocks[0], numResConvs=numResConvs[0])
+                               numDown=numDown, resBlocks=resBlocks[1], numResConvs=numResConvs[1])
         self.latentChannels = latentChannels
         self.stochastic = stochastic
     
