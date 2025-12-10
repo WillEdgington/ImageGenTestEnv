@@ -125,7 +125,7 @@ class LDMVAE(nn.Module):
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         return self.encoder(x)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         mu, logvar = self.encoder(x)
         z = self.reparameterize(mu, logvar)
         return self.decoder(z), mu, logvar
