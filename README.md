@@ -122,10 +122,6 @@ For the latent diffusion model, I created an interesting visualisation. I took a
 
 LDMs were a nice capstone to the whole project and something I would like to explore further, particularly [Latent Diffusion GANs](https://arxiv.org/pdf/2406.11713), which offer faster sampling and stronger generative quality through the use of adversarial training.
 
-**Forward diffusion in latent space - Stanford Cars (linear schedule, T=1000):**
-
-![Latent Forward Diffusion](saved_plots/STANFORDCARS128T1000COSINELATENTFORWARDDIFFUSION.png)
-
 📝 [LinkedIn write-up](https://www.linkedin.com/posts/williamedgington_latentdiffusion-generativeai-deeplearning-activity-7382453730354515969-HS1l?utm_source=share&utm_medium=member_desktop&rcm=ACoAADhvq3kBAiYFGash7JC0MVa1vuLOctbJVkM)
 
 ---
